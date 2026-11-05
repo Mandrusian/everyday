@@ -310,6 +310,7 @@ h2 { font-size: clamp(34px, 4.4vw, 58px); line-height: 1.04; letter-spacing: -.0
 #get h2 { max-width: 14em; margin-inline: auto; }
 .tickets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; max-width: 880px; margin: clamp(48px, 6vw, 72px) auto 0; text-align: left; }
 .ticket {
+  min-width: 0;
   position: relative; display: flex; flex-direction: column; align-items: flex-start;
   padding: 34px 32px 30px; border-radius: 18px;
   background: var(--grain), var(--paper);
@@ -362,13 +363,13 @@ h2 { font-size: clamp(34px, 4.4vw, 58px); line-height: 1.04; letter-spacing: -.0
 
 /* ---------- Narrow screens ---------- */
 @media (max-width: 900px) {
-  .split { grid-template-columns: 1fr; gap: 56px; }
+  .split { grid-template-columns: minmax(0, 1fr); gap: 56px; }
   .split.flip .copy { order: 0; }
   .copy { max-width: 560px; }
   .trio { max-width: none; }
-  .tickets { grid-template-columns: 1fr; max-width: 480px; }
+  .tickets { grid-template-columns: minmax(0, 1fr); max-width: 480px; }
   .hero { min-height: 0; padding-top: 128px; }
-  .hero-grid { grid-template-columns: 1fr; gap: 64px; }
+  .hero-grid { grid-template-columns: minmax(0, 1fr); gap: 64px; }
   .slips { justify-self: center; max-width: 380px; }
 }
 @media (max-width: 720px) {
@@ -382,6 +383,12 @@ h2 { font-size: clamp(34px, 4.4vw, 58px); line-height: 1.04; letter-spacing: -.0
   .slip { padding: 22px 22px 24px; }
   .ui { padding: 6px 14px 16px; }
   .ticket { padding: 28px 24px 24px; }
+  .price { font-size: 44px; }
+  .ticket pre { font-size: 12.5px; -webkit-overflow-scrolling: touch; }
+  .nav { padding: 0 16px; }
+  .brand { font-size: 19px; }
+  .nav .pill { padding: 7px 13px; font-size: 13.5px; }
+  .theme { width: 32px; height: 32px; }
   .trio > div { grid-template-columns: 1fr; gap: 8px; }
   .btns span { font-size: 12px; }
   .scroll-hint { display: none; }
@@ -430,3 +437,18 @@ h2 { font-size: clamp(34px, 4.4vw, 58px); line-height: 1.04; letter-spacing: -.0
 .doc .caps { font-weight: 600; color: var(--ink); }
 .doc .foot-note { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--rule); font-size: 14px; color: var(--ink-3); }
 .doc a.back { color: var(--ink); }
+
+/* Never let anything widen the page on small screens. */
+html, body { max-width: 100%; overflow-x: clip; }
+@media (max-width: 380px) {
+  .hero h1 { font-size: 40px; }
+  .cta .btn { width: 100%; }
+}
+/* Legal tables stack into cards on phones. */
+@media (max-width: 600px) {
+  .doc table, .doc tbody, .doc tr, .doc td { display: block; width: 100%; }
+  .doc tr:first-child { display: none; }
+  .doc tr { padding: 12px 0; border-bottom: 1px solid var(--rule); }
+  .doc td { border: 0; padding: 2px 0; }
+  .doc td:first-child { color: var(--ink); font-weight: 600; }
+}
