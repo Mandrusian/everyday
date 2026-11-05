@@ -238,10 +238,15 @@ mod tests {
     }
     #[test] fn http_send_works_against_a_local_server_and_reports_status() {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap(); let port = listener.local_addr().unwrap().port();
-        std::thread::spawn(move || { for s in listener.incoming().take(1) { let mut s = s.unwrap(); let mut buf = [0u8; 4096]; let n = s.read(&mut buf).unwrap(); let req = String::from_utf8_lossy(&buf[..n]).to_lowercase();
-            assert!(req.contains("authorization: bearer k")); let body = r#"{"choices":[{"message":{"content":"pong"}}]}"#;
-            write!(s, "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}", body.len(), body).unwrap(); } });
+        // Serve every connection (a client may retry), reading until the headers end; never panic inside the server.
+        let saw_auth = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)); let flag = saw_auth.clone();
+        std::thread::spawn(move || { for s in listener.incoming() { let Ok(mut s) = s else { continue };
+            let mut req = Vec::new(); let mut buf = [0u8; 4096];
+            while !req.windows(4).any(|w| w == b"\r\n\r\n") { match s.read(&mut buf) { Ok(0) | Err(_) => break, Ok(n) => req.extend_from_slice(&buf[..n]) } }
+            if String::from_utf8_lossy(&req).to_lowercase().contains("authorization: bearer k") { flag.store(true, std::sync::atomic::Ordering::SeqCst); }
+            let body = r#"{"choices":[{"message":{"content":"pong"}}]}"#;
+            let _ = write!(s, "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}", body.len(), body); } });
         let out = complete(Provider::Local, "m", "k", &format!("http://127.0.0.1:{port}/v1"), &req()).unwrap();
-        assert_eq!(out, "pong");
+        assert_eq!(out, "pong"); assert!(saw_auth.load(std::sync::atomic::Ordering::SeqCst), "the key is sent as a bearer token");
     }
 }
