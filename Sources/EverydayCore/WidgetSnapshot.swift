@@ -32,7 +32,7 @@ public struct WidgetSnapshot: Codable, Sendable {
     public var tasks: [Task] = []
     public var quote: Quote?
     /// "flat" or "glass", chosen in Settings → Widgets.
-    public var style = "flat"
+    public var style = "glass"
     /// Days of the current month (1–31) that have an event, for the month calendar.
     public var eventDays: [Int] = []
     public var countdowns: [Countdown] = []

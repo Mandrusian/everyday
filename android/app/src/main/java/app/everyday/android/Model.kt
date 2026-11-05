@@ -68,6 +68,7 @@ class AppModel(private val scope: CoroutineScope) {
         deck = Core.list("swipeDeck").map(::story)
         learned = (Core.run("topInterests") as? org.json.JSONArray)?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: emptyList()
         tasks = Core.list("tasks").map { TaskItem(it.getString("id"), it.getString("title"), if (it.isNull("due")) null else it.optLong("due")) }
+        runCatching { WidgetSnapshot.save(Core.app, briefing, rows, tasks, events) }
     }
 
     private fun story(o: JSONObject) = Story(o.optString("title"), o.optString("source"), o.optString("url"), o.optString("summary"), o.optInt("also"))
@@ -90,6 +91,7 @@ class AppModel(private val scope: CoroutineScope) {
         try {
             val text = Core.run("briefing") as String
             briefing = text
+            runCatching { WidgetSnapshot.save(Core.app, text, rows, tasks, events) }
             replies = Core.list("quickReplies", json("briefing" to text)).map { o -> Reply(o.optString("label"), o.optString("kind"), (0 until (o.optJSONArray("threadIds")?.length() ?: 0)).map { o.getJSONArray("threadIds").getString(it) }, o.optString("text")) }
         } catch (e: Core.Failure) { toast(e.message ?: "The briefing couldn't be written.") } finally { writing = false }
     }

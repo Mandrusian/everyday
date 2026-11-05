@@ -14,7 +14,9 @@ object Core {
 
     private lateinit var secrets: Secrets
 
+    lateinit var app: Context
     fun open(ctx: Context) {
+        app = ctx.applicationContext
         secrets = Secrets(ctx)
         val err = init(ctx.filesDir.absolutePath)
         if (err.isNotEmpty()) throw IllegalStateException(err)

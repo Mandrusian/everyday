@@ -167,7 +167,7 @@ final class AppModel {
             s.stories = stories.prefix(6).map { .init(title: $0.lead.title, source: $0.lead.source) }
             s.tasks = openTasks.prefix(6).map { .init(title: $0.title, due: $0.due) }
             s.quote = (try? db.get("quote", id: Self.quoteKey(prefs)) as WidgetSnapshot.Quote?) ?? nil
-            s.style = prefs.string(Prefs.Key.widgetStyle, default: "flat")
+            s.style = prefs.string(Prefs.Key.widgetStyle, default: "glass")
             let cal = Calendar.current, now = Date()
             s.eventDays = Array(Set(events.filter { cal.isDate($0.start, equalTo: now, toGranularity: .month) }.map { cal.component(.day, from: $0.start) })).sorted()
             s.countdowns = widgetCountdowns.filter { $0.date > now.addingTimeInterval(-86400) }.sorted { $0.date < $1.date }

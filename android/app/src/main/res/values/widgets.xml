@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_month">The month, with what\'s next when it\'s tall.</string>
+    <string name="widget_brief">Your briefing in a few sentences.</string>
+    <string name="widget_needs">Mail waiting on you.</string>
+    <string name="widget_tasks">What\'s open.</string>
+</resources>

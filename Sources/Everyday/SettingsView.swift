@@ -292,7 +292,7 @@ struct VoicePane: View {
 struct WidgetsPane: View {
     @Environment(AppModel.self) private var model
     @Local private var topic = Prefs.shared.string(Prefs.Key.quoteTopic, default: "Stoicism")
-    @Local private var style = Prefs.shared.string(Prefs.Key.widgetStyle, default: "flat")
+    @Local private var style = Prefs.shared.string(Prefs.Key.widgetStyle, default: "glass")
     @Local private var busy = false
     @Local private var newTitle = ""
     @Local private var newDate = Date().addingTimeInterval(86400 * 7)

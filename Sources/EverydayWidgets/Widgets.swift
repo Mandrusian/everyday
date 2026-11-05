@@ -105,7 +105,7 @@ struct WidgetBackground: View {
     let look: Look
     @Environment(\.colorScheme) var scheme
     var body: some View {
-        if look == .glass { Rectangle().fill(.ultraThinMaterial) }
+        if look == .glass { Color.clear }  // macOS draws real Liquid Glass behind a clear container
         else { Ink(scheme: scheme, look: .flat).paper }
     }
 }
@@ -113,7 +113,7 @@ struct WidgetBackground: View {
 extension View {
     /// Flat paper or glass, from the app's setting unless a custom widget chose its own.
     func styled(_ snap: Snap?, override: String? = nil) -> some View {
-        let look = Look(rawValue: override ?? snap?.style ?? "flat") ?? .flat
+        let look = Look(rawValue: override ?? snap?.style ?? "glass") ?? .glass
         return environment(\.look, look).containerBackground(for: .widget) { WidgetBackground(look: look) }
     }
 }
