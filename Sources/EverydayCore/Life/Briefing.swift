@@ -91,13 +91,29 @@ public final class BriefingService: @unchecked Sendable {
     }
     /// Instantly drops sentences about things the reader has just handled, before any rewrite finishes.
     public func scrubbed(_ b: Briefing) -> Briefing {
-        var x = b; x.text = Briefing.removingSentences(mentioning: Self.bannedNames(ctx.mail), from: b.text)
-        if x.text != b.text { x.replies = nil; save(x) }
+        let banned = Self.bannedNames(ctx.mail)
+        var x = b; x.text = Briefing.removingSentences(mentioning: banned, from: b.text)
+        x.fullText = b.fullText.map { Briefing.removingSentences(mentioning: banned, from: $0) }
+        if x.text != b.text || x.fullText != b.fullText { x.replies = nil; save(x) }
         return x
     }
     public func save(_ b: Briefing) { try? db.put("briefing", id: "latest", b) }
 
     public func latest() -> Briefing? { try? db.get("briefing", id: "latest") }
+
+    /// Shows a shorter version, keeping the full one so it can be restored instantly.
+    public func shorten(_ b: Briefing) async throws -> Briefing {
+        let full = b.fullText ?? b.text
+        var short = try await intel.shorten(briefing: full)
+        if !intel.skimOn { short = SkimMarkup.strip(short) }
+        var x = b; x.fullText = full; x.text = short
+        save(x); return x
+    }
+    public func restoreFull(_ b: Briefing) -> Briefing {
+        guard let full = b.fullText else { return b }
+        var x = b; x.text = full; x.fullText = nil
+        save(x); return x
+    }
 
     /// Streams the briefing: `onPartial` receives the full text so far, as it is written.
     public func generate(name: String, onPartial: (@Sendable (String) -> Void)? = nil) async throws -> Briefing {
@@ -113,7 +129,7 @@ public final class BriefingService: @unchecked Sendable {
         }
         // Whatever the model did, handled senders never appear: drop any sentence that still names one.
         text = Briefing.removingSentences(mentioning: banned, from: text)
-        text = text.trimmingCharacters(in: .whitespacesAndNewlines).skimLimited(8)
+        text = text.trimmingCharacters(in: .whitespacesAndNewlines).skimLimited(10)
         if intel.skimOn {
             // The model sometimes skips the tags on long inputs; highlight dates, amounts and urgent words locally instead.
             if !SkimMarkup.hasTags(text) {

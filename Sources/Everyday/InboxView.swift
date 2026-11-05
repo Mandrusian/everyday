@@ -130,6 +130,7 @@ struct InboxView: View {
 }
 
 struct MailRowView: View {
+    @Environment(AppModel.self) private var model
     let row: MailRow
     let selected: Bool
     var body: some View {
@@ -138,6 +139,7 @@ struct MailRowView: View {
                 if row.message.isUnread { Circle().fill(Palette.accent).frame(width: 7, height: 7) }
                 Text(row.message.fromName).font(.ui(16, row.message.isUnread ? .semibold : .regular)).lineLimit(1)
                 if row.threadCount > 1 { Text("\(row.threadCount)").font(.ui(12.5)).foregroundStyle(Palette.text3) }
+                if model.mail.accountEmails.count > 1 { Text(model.mail.owner(row.message).split(separator: "@").first.map(String.init) ?? "").font(.ui(11.5)).foregroundStyle(Palette.text3).padding(.horizontal, 6).padding(.vertical, 1).background(Capsule().fill(Palette.control)).lineLimit(1).help("Arrived in \(model.mail.owner(row.message))") }
                 Spacer()
                 Text(row.message.date.relativeShort).font(.ui(13)).foregroundStyle(Palette.text3)
             }
@@ -338,7 +340,7 @@ struct SendReview: View {
             }
             ScrollView { Text(text).font(.ui(16)).lineSpacing(4).frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled) }
                 .frame(height: 200).padding(12).background(RoundedRectangle(cornerRadius: 8).fill(Palette.raised))
-            Text("This will be sent from \(model.mail.accountEmail ?? "your account") immediately and cannot be unsent.").font(.ui(14)).foregroundStyle(Palette.text2)
+            Text("This will be sent from \(to.map { model.mail.owner($0) } ?? model.mail.accountEmail ?? "your account") immediately and cannot be unsent.").font(.ui(14)).foregroundStyle(Palette.text2)
             HStack { Spacer()
                 Button("Cancel") { dismiss() }.buttonStyle(QuietButtonStyle()).keyboardShortcut(.cancelAction)
                 Button(sending ? "Sending…" : "Send") { send() }.buttonStyle(PrimaryButtonStyle()).disabled(sending)

@@ -24,6 +24,9 @@ enum Palette {
     static let accentText = dyn(0xe8916f, 0x9a4424)
     static let good = dyn(0xaebf8a, 0x4a5530)
     static let amber = dyn(0xe6c05f, 0x7a5a0c)
+    static let teal = dyn(0x7fc4b8, 0x1f5f56)       // money
+    static let lavender = dyn(0xb9a7e0, 0x54418a)   // places
+    static let clayText = dyn(0xeb9a76, 0x9a4423)   // things to do
     static let warnBG = dyn(0x3b2a22, 0xf6e2d6)
     static let warnFG = dyn(0xe8a184, 0x8a3f22)
     static let alertBG = dyn(0x3e2523, 0xf3d9d4)

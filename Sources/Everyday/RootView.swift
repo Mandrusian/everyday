@@ -102,7 +102,7 @@ struct SidebarView: View {
             HStack(spacing: 10) {
                 Circle().fill(model.mailError != nil ? Palette.alertBG : Palette.control).frame(width: 28, height: 28).overlay(Text(String(model.userName.prefix(1)).uppercased()).font(.ui(14)).foregroundStyle(Palette.text))
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(model.mail.accountEmail ?? "No mail account").font(.ui(13.5)).foregroundStyle(Palette.text).lineLimit(1)
+                    Text(model.mail.accountEmails.count > 1 ? "\(model.mail.accountEmails.count) mail accounts" : (model.mail.accountEmail ?? "No mail account")).font(.ui(13.5)).foregroundStyle(Palette.text).lineLimit(1)
                     Text(statusLine).font(.ui(12.5)).foregroundStyle(model.mailError != nil ? Palette.alertFG : Palette.text3).lineLimit(1)
                 }
             }.contentShape(Rectangle())

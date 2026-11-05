@@ -19,6 +19,8 @@ public struct EmailMessage: Codable, Identifiable, Hashable, Sendable {
     /// Stored as an optional so mail saved by older versions (without this key) still decodes.
     public var storedAttachments: [String]? = nil
     public var attachmentNames: [String] { get { storedAttachments ?? [] } set { storedAttachments = newValue.isEmpty ? nil : newValue } }
+    /// The address of the account this came from. Mail stored before multiple accounts has none and belongs to the first account.
+    public var account: String? = nil
 
     public var isUnread: Bool { labelIds.contains("UNREAD") }
     public var inInbox: Bool { labelIds.contains("INBOX") }
@@ -220,6 +222,8 @@ public struct Briefing: Codable, Hashable, Sendable {
     public var storyCount: Int
     public var eventCount: Int
     public var replies: [QuickReply]? = nil
+    /// The full-length text while a shorter version is shown, so it can be restored without asking the AI again.
+    public var fullText: String? = nil
 }
 
 /// A one-tap reply to the briefing. Each one only does something local and visible when pressed.

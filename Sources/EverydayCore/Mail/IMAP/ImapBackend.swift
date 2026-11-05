@@ -3,23 +3,32 @@ import Foundation
 public final class ImapBackend: MailBackend, @unchecked Sendable {
     private let prefs: Prefs
     private let testing: (host: String, port: UInt16, tls: Bool)?     // local fake server in checks
-    public init(prefs: Prefs = .shared, testing: (host: String, port: UInt16, tls: Bool)? = nil) { self.prefs = prefs; self.testing = testing }
+    /// The account this backend works with. Nil means the first account in the list.
+    public let boundEmail: String?
+    public init(prefs: Prefs = .shared, testing: (host: String, port: UInt16, tls: Bool)? = nil, email: String? = nil) {
+        self.prefs = prefs; self.testing = testing; self.boundEmail = email
+    }
+    /// The same setup, working with another of the reader's accounts.
+    public func bound(to email: String) -> ImapBackend { ImapBackend(prefs: prefs, testing: testing, email: email) }
 
     // MARK: Account storage
 
     public var account: ImapAccount? {
-        guard let s = prefs.string("imap.account").data(using: .utf8), !s.isEmpty else { return nil }
-        return try? JSONDecoder().decode(ImapAccount.self, from: s)
+        let list = ImapAccounts.load(prefs)
+        guard let e = boundEmail?.lowercased() else { return list.first }
+        return list.first { $0.email.lowercased() == e }
     }
     public static func passwordKey(_ email: String) -> String { "imap.password.\(email.lowercased())" }
+    /// Saves the account (adding it to the list, or updating it if the address is already there) and its password.
     public func save(account: ImapAccount, password: String) throws {
         let cleaned = password.components(separatedBy: .whitespacesAndNewlines).joined()
         try Keychain.set(cleaned, for: Self.passwordKey(account.email))
-        if let d = try? JSONEncoder().encode(account) { prefs.set(String(decoding: d, as: UTF8.self), "imap.account") }
+        ImapAccounts.upsert(account, prefs)
     }
     public func remove() {
-        if let a = account { Keychain.delete(Self.passwordKey(a.email)) }
-        prefs.remove("imap.account")
+        guard let a = account else { return }
+        Keychain.delete(Self.passwordKey(a.email))
+        ImapAccounts.remove(email: a.email, prefs)
     }
     var password: String { account.flatMap { Keychain.get(Self.passwordKey($0.email)) } ?? "" }
 
@@ -64,10 +73,11 @@ public final class ImapBackend: MailBackend, @unchecked Sendable {
 
     // MARK: Ids
 
-    static func makeID(validity: Int, uid: Int) -> String { "imap:\(validity):\(uid)" }
-    static func parseID(_ id: String) -> (validity: Int, uid: Int)? {
+    /// Ids are "imap:validity:uid" for the first account and "imap:tag:validity:uid" for any added later, so two accounts never collide.
+    static func makeID(validity: Int, uid: Int, tag: String? = nil) -> String { tag.map { "imap:\($0):\(validity):\(uid)" } ?? "imap:\(validity):\(uid)" }
+    public static func parseID(_ id: String) -> (validity: Int, uid: Int)? {
         let p = id.split(separator: ":")
-        guard p.count == 3, p[0] == "imap", let v = Int(p[1]), let u = Int(p[2]) else { return nil }
+        guard p.first == "imap", p.count == 3 || p.count == 4, let v = Int(p[p.count - 2]), let u = Int(p[p.count - 1]) else { return nil }
         return (v, u)
     }
 
@@ -99,11 +109,12 @@ public final class ImapBackend: MailBackend, @unchecked Sendable {
         let snippet = String(body.replacingOccurrences(of: "\n", with: " ").replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression).prefix(160))
         var labels = ["INBOX"]
         if !f.flags.contains("\\seen") { labels.append("UNREAD") }
-        var msg = EmailMessage(id: Self.makeID(validity: validity, uid: f.uid), threadId: "t" + Hashing.short(p.threadKey), fromName: p.fromName.isEmpty ? p.fromAddress : p.fromName,
+        var msg = EmailMessage(id: Self.makeID(validity: validity, uid: f.uid, tag: account?.tag), threadId: "t" + Hashing.short(p.threadKey), fromName: p.fromName.isEmpty ? p.fromAddress : p.fromName,
                             fromAddress: p.fromAddress, to: p.to, subject: p.subject.isEmpty ? "(no subject)" : p.subject, snippet: snippet, body: body,
                             date: p.date ?? f.internalDate ?? Date(), labelIds: labels, hasAttachments: p.hasAttachments, messageIdHeader: p.messageId)
         msg.listUnsubscribe = p.listUnsubscribe
         msg.attachmentNames = p.attachmentNames
+        msg.account = account?.email
         return msg
     }
 

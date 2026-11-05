@@ -65,9 +65,9 @@ check("skim: plain text unchanged", SkimMarkup.strip("Nothing special.") == "Not
 let plainBrief = "You have a final deadline tomorrow, November 6, to update your Google One payment of $1,240 by 15:30. Google flagged unrecognized sign-in attempts. It is 30°C in Cairns."
 let tagged = SkimMarkup.autoTag(plainBrief, names: ["Google One"], places: ["Cairns"])
 let tk = SkimMarkup.segments(tagged).filter { $0.kind != nil }
-check("autoTag finds dates, amounts, urgency, names, places", Set(tk.map { $0.kind! }) == [.urgent, .date, .number, .person] && tk.count <= 8 && SkimMarkup.strip(tagged) == plainBrief, "\(tk.map { "\($0.kind!.rawValue):\($0.text)" })")
+check("autoTag finds dates, amounts, urgency, names, places", Set(tk.map { $0.kind! }) == [.urgent, .date, .money, .number, .person, .place] && tk.count <= 10 && SkimMarkup.strip(tagged) == plainBrief, "\(tk.map { "\($0.kind!.rawValue):\($0.text)" })")
 check("autoTag leaves already-tagged text alone", SkimMarkup.autoTag("Pay <<u|now>> by Friday") == "Pay <<u|now>> by Friday")
-check("autoTag caps highlights", SkimMarkup.segments(SkimMarkup.autoTag("Mon Tue Wednesday Thursday Friday Saturday Sunday today tomorrow tonight 9am 10am 11am")).filter { $0.kind != nil }.count <= 8)
+check("autoTag caps highlights", SkimMarkup.segments(SkimMarkup.autoTag("Mon Tue Wednesday Thursday Friday Saturday Sunday today tomorrow tonight 9am 10am 11am")).filter { $0.kind != nil }.count <= 10)
 
 // Quick replies: parsing and safety
 let rj = "[{\"label\":\"That was me\",\"kind\":\"handled\",\"ids\":[\"m1\",\"fake\"]},{\"label\":\"Add as task\",\"kind\":\"task\",\"ids\":[\"m2\"]},{\"label\":\"Bogus\",\"kind\":\"delete_everything\",\"ids\":[\"m1\"]},{\"label\":\"No ids\",\"kind\":\"handled\",\"ids\":[\"zzz\"]},{\"label\":\"Tell me more\",\"kind\":\"ask\",\"text\":\"What were the sign-ins?\"}]"
@@ -371,6 +371,48 @@ do {
     check("presets: domain guess", MailPreset.guess(email: "x@gmail.com")?.id == "gmail" && MailPreset.guess(email: "x@icloud.com")?.id == "icloud" && MailPreset.guess(email: "x@example.org") == nil)
 } catch { check("imap against fake server", false, "\(error)") }
 
+// Several mail accounts in one inbox
+do {
+    let srv = FakeImapServer()
+    try await srv.start()
+    defer { srv.stop() }
+    for (i, s) in ["Roadmap", "Invoice"].enumerated() { _ = srv.add("From: Oscar Fox <oscar@example.com>\nTo: me@example.com\nSubject: \(s)\nDate: Wed, 05 Nov 2026 06:1\(i):00 +0000\nMessage-ID: <multi\(i)@x>\nContent-Type: text/plain\n\nHello \(i)\n") }
+    let mp = Prefs(suite: "everyday.checks.multi"); mp.resetAll()
+    func acct(_ e: String) -> ImapAccount { ImapAccount(email: e, username: e, presetID: "custom", imapHost: "127.0.0.1", imapPort: Int(srv.port), smtpHost: "127.0.0.1", smtpPort: 25, smtpSecurity: .ssl) }
+    // An account saved by an older version (a single "imap.account") becomes the first in the list.
+    mp.set(String(decoding: try JSONEncoder().encode(acct("first@example.com")), as: UTF8.self), "imap.account")
+    try Keychain.set("pw", for: ImapBackend.passwordKey("first@example.com"))
+    check("accounts: an older single account is read as the first", ImapAccounts.load(mp).map(\.email) == ["first@example.com"] && ImapAccounts.load(mp)[0].tag == nil)
+    let base = ImapBackend(prefs: mp, testing: ("127.0.0.1", srv.port, false))
+    try base.save(account: acct("second@example.com"), password: "pw")
+    let list = ImapAccounts.load(mp)
+    check("accounts: a second account is added with its own tag", list.map(\.email) == ["first@example.com", "second@example.com"] && list[0].tag == nil && list[1].tag != nil && mp.string("imap.account").isEmpty, "\(list.map { "\($0.email):\($0.tag ?? "-")" })")
+    check("imap: tagged ids parse", ImapBackend.parseID("imap:ab12cd:7:42").map { $0.validity == 7 && $0.uid == 42 } == true && ImapBackend.parseID("imap:7:42") != nil)
+    let mdb = try Database(url: nil)
+    let mm = MailService(db: mdb, auth: GoogleAuth(prefs: mp), intelligence: Intelligence(ai: AIService(db: mdb, prefs: mp), prefs: mp), prefs: mp, imap: base)
+    check("accounts: the inbox knows both accounts, first one first", mm.accountEmails == ["first@example.com", "second@example.com"], "\(mm.accountEmails)")
+    _ = try await mm.sync()
+    let all = mm.emails(limit: 100)
+    let firstMail = all.filter { mm.owner($0) == "first@example.com" }, secondMail = all.filter { mm.owner($0) == "second@example.com" }
+    check("accounts: each account's mail is stored apart, with no id clashes", firstMail.count == 2 && secondMail.count == 2 && Set(all.map(\.id)).count == 4, "first \(firstMail.count) second \(secondMail.count) ids \(all.map(\.id))")
+    check("accounts: the first account keeps the original id format", firstMail.allSatisfy { $0.id.split(separator: ":").count == 3 } && secondMail.allSatisfy { $0.id.split(separator: ":").count == 4 })
+    check("accounts: each account remembers its own sync position", (try? mdb.get("meta", id: "mailSyncState", as: String.self)) != nil && (try? mdb.get("meta", id: "mailSyncState.second@example.com", as: String.self)) != nil)
+    check("accounts: replies go out from the account the mail arrived in", secondMail.first.map { mm.backend(for: $0).accountEmail } == "second@example.com")
+    let again = try await mm.sync()
+    check("accounts: a second sync adds nothing new", again == 0 && mm.emails(limit: 100).count == 4, "\(again) changes, \(mm.emails(limit: 100).count) stored")
+    mm.disconnect(email: "second@example.com", wipe: true)
+    check("accounts: removing one account deletes only its mail", mm.accountEmails == ["first@example.com"] && mm.emails(limit: 100).count == 2 && Keychain.get(ImapBackend.passwordKey("second@example.com")) == nil)
+    mm.disconnect(wipe: true)
+    check("accounts: disconnecting everything leaves nothing", mm.accountEmails.isEmpty && ImapAccounts.load(mp).isEmpty && mm.emails(limit: 100).isEmpty)
+} catch { check("several mail accounts", false, "\(error)") }
+
+// More kinds of highlight
+let tagged7 = SkimMarkup.autoTag("Pay $1,240 to Studio Kite by Friday. It is 31°C in Cairns, so reply to Oscar soon.", names: ["Studio Kite"], places: ["Cairns"])
+let kinds7 = Set(SkimMarkup.segments(tagged7).compactMap(\.kind))
+check("skim: money, places and numbers get their own colours", kinds7.isSuperset(of: [.money, .place, .number, .date, .person]), tagged7)
+check("skim: every tag letter round-trips", SkimMarkup.Kind.allCases.allSatisfy { k in SkimMarkup.segments("x <<\(k.rawValue)|y>> z").contains { $0.kind == k && $0.text == "y" } })
+check("briefing prompt: the default names the reader", Intelligence.defaultBriefingPrompt.contains("{name}"))
+
 // Live AI checks: run with GEMINI_API_KEY=... swift run EverydayChecks
 if let key = ProcessInfo.processInfo.environment["GEMINI_API_KEY"], !key.isEmpty {
     do {
@@ -406,7 +448,7 @@ if let key = ProcessInfo.processInfo.environment["GEMINI_API_KEY"], !key.isEmpty
             let ctx = "EMAIL NEEDING ATTENTION:\n- [Deadline, priority 90] Harbour Property: Lease renewal — Sign and return by Friday 6 November\n- [Needs reply, priority 85] Oscar Fox: Thursday roadmap sync — asks if 3pm works\n\nCALENDAR:\n- Thu 5 Nov 15:00: Roadmap sync\n\nWEATHER in Cairns: 30C, partly cloudy.\n\nTOP NEWS:\n- EU votes on AI licensing (Guardian, Reuters)"
             let b = try await intel.briefing(context: ctx, name: "Xavi")
             let tags = SkimMarkup.segments(b).filter { $0.kind != nil }
-            check("briefing uses skim tags (1-8, none leaked)", (1...8).contains(tags.count) && !SkimMarkup.strip(b).contains("<<"), "\(tags.count) highlights: \(tags.map { "\($0.kind!.rawValue):\($0.text)" })")
+            check("briefing uses skim tags (1-10, none leaked)", (1...10).contains(tags.count) && !SkimMarkup.strip(b).contains("<<"), "\(tags.count) highlights: \(tags.map { "\($0.kind!.rawValue):\($0.text)" })")
         }
         await step("natural speech") {
             let dir = FileManager.default.temporaryDirectory.appendingPathComponent("ed-tts-check", isDirectory: true)

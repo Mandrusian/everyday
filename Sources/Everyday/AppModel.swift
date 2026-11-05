@@ -76,6 +76,7 @@ final class AppModel {
     var triaging = false
     var refreshingNews = false
     var generatingBriefing = false
+    var shorteningBriefing = false
     var mailProgress = ""
     var banner: Banner?
     var selectedThread: String?
@@ -134,8 +135,12 @@ final class AppModel {
         let gen = mailReloadGeneration
         Task.detached(priority: .userInitiated) { [weak self, mail] in
             let r = mail.rows(), s = mail.suggestions()
-            await MainActor.run { guard let self, gen == self.mailReloadGeneration else { return }; animated { self.rows = r; self.suggestions = s } }
+            await self?.apply(rows: r, suggestions: s, generation: gen)
         }
+    }
+    private func apply(rows r: [MailRow], suggestions s: [TaskSuggestion], generation gen: Int) {
+        guard gen == mailReloadGeneration else { return }   // a newer reload is already on its way
+        animated { rows = r; suggestions = s }
     }
     func reloadTasks() { let o = tasks.open(), d = tasks.completed(), s = mail.suggestions(); animated { openTasks = o; doneTasks = d; suggestions = s } }
     func reloadNews() { let st = news.stories(limit: 80), sv = news.savedArticles(); animated { stories = st; savedArticles = sv } }
@@ -212,6 +217,15 @@ final class AppModel {
             animated { briefing = b }
             Task { await loadReplies() }
         } catch { if !silent { fail(error, "Briefing") } }
+    }
+
+    /// Swaps between a shorter version of the briefing and the full one.
+    func toggleShortBriefing() async {
+        guard let b = briefing, !shorteningBriefing else { return }
+        if b.fullText != nil { animated { briefing = briefingService.restoreFull(b) }; return }
+        guard ai.isConfigured else { say("Add an AI provider key in Settings to shorten the briefing.", error: true); return }
+        shorteningBriefing = true; defer { shorteningBriefing = false }
+        do { let x = try await briefingService.shorten(b); animated { briefing = x } } catch { fail(error, "Briefing") }
     }
 
     func loadReplies() async {
@@ -555,7 +569,7 @@ final class AppModel {
 }
 
 enum SettingsPane: String, CaseIterable, Identifiable {
-    case general = "General", briefing = "Briefing", voice = "Voice", accounts = "Accounts", ai = "AI provider", sources = "News sources", interests = "Interests", privacy = "Privacy", notifications = "Notifications", appearance = "Appearance"
+    case general = "General", briefing = "Briefing", voice = "Voice", accounts = "Accounts", ai = "AI provider", sources = "News sources", interests = "Interests", privacy = "Privacy", notifications = "Notifications", appearance = "Appearance", advanced = "Advanced"
     var id: String { rawValue }
 }
 

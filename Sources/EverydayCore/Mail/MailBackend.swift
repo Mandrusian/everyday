@@ -90,10 +90,41 @@ public struct ImapAccount: Codable, Hashable, Sendable {
     public var smtpHost: String
     public var smtpPort: Int
     public var smtpSecurity: MailPreset.Security
+    /// Short tag that keeps this account's message ids apart from other accounts'. The first account ever added has none,
+    /// so mail stored before multiple accounts existed keeps its ids.
+    public var tag: String? = nil
     public init(email: String, username: String, presetID: String, imapHost: String, imapPort: Int, smtpHost: String, smtpPort: Int, smtpSecurity: MailPreset.Security) {
         self.email = email; self.username = username; self.presetID = presetID; self.imapHost = imapHost; self.imapPort = imapPort
         self.smtpHost = smtpHost; self.smtpPort = smtpPort; self.smtpSecurity = smtpSecurity
     }
+}
+
+/// Every IMAP account the reader has added, in the order they were added. Passwords stay in the Keychain.
+public enum ImapAccounts {
+    static let key = "imap.accounts", legacyKey = "imap.account"
+
+    public static func load(_ prefs: Prefs) -> [ImapAccount] {
+        if let d = prefs.string(key).data(using: .utf8), !d.isEmpty, let list = try? JSONDecoder().decode([ImapAccount].self, from: d) { return list }
+        // Before multiple accounts there was a single stored account; it becomes the first in the list.
+        if let d = prefs.string(legacyKey).data(using: .utf8), !d.isEmpty, let one = try? JSONDecoder().decode(ImapAccount.self, from: d) { return [one] }
+        return []
+    }
+
+    static func store(_ list: [ImapAccount], _ prefs: Prefs) {
+        if let d = try? JSONEncoder().encode(list) { prefs.set(String(decoding: d, as: UTF8.self), key) }
+        prefs.remove(legacyKey)
+        if list.isEmpty { prefs.remove(key) }
+    }
+
+    /// Adds the account, or updates it if the same address is already there (keeping its tag).
+    static func upsert(_ a: ImapAccount, _ prefs: Prefs) {
+        var list = load(prefs), acct = a
+        if let i = list.firstIndex(where: { $0.email.lowercased() == a.email.lowercased() }) { acct.tag = list[i].tag; list[i] = acct }
+        else { acct.tag = list.isEmpty ? nil : String(UUID().uuidString.prefix(6)).lowercased(); list.append(acct) }
+        store(list, prefs)
+    }
+
+    static func remove(email: String, _ prefs: Prefs) { store(load(prefs).filter { $0.email.lowercased() != email.lowercased() }, prefs) }
 }
 
 // MARK: Composing messages (used for drafts and replies)

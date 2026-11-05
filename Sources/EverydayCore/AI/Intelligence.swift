@@ -13,7 +13,7 @@ public final class Intelligence: @unchecked Sendable {
     var skimRule: String { skimOn ? " " + SkimMarkup.promptRule : "" }
     var skimOn: Bool { prefs.bool("skim.highlights", default: true) }
     /// Repeated at the end of the user message: long inputs make models forget instructions that sit only in the system prompt.
-    var skimReminder: String { skimOn ? "\n\nReminder: mark 4 to 8 key phrases with the <<u|…>> <<d|…>> <<p|…>> <<n|…>> tags in your reply." : "" }
+    var skimReminder: String { skimOn ? "\n\nReminder: mark 4 to 10 key phrases with the <<u|…>> <<a|…>> <<d|…>> <<p|…>> <<m|…>> <<n|…>> <<l|…>> tags in your reply." : "" }
 
     static func dateString(_ d: Date) -> String {
         let f = DateFormatter(); f.dateFormat = "EEEE d MMMM yyyy, HH:mm (zzz)"; return f.string(from: d)
@@ -89,17 +89,30 @@ public final class Intelligence: @unchecked Sendable {
 
     // MARK: Briefing
 
+    /// The writing instructions for the briefing. The reader can replace them in Settings → Briefing → Advanced;
+    /// "{name}" becomes their first name. The safety rules are always added after them and cannot be edited.
+    public static let defaultBriefingPrompt = "You write {name}'s daily briefing, a short personal note in warm, plain prose. Cover, in this order and only if present: what needs attention (deadlines, replies owed), the calendar, the weather in one clause, then the two or three most important news stories with why they matter. 90 to 150 words, one or two paragraphs, no headings, no bullet points, no greeting."
+
     func briefingSystem(name: String) -> String {
         let standing = prefs.string(Prefs.Key.briefingInstructions).trimmingCharacters(in: .whitespacesAndNewlines)
         let extra = standing.isEmpty ? "" : "\nThe reader's standing instructions for their briefing. They override your defaults, so follow them exactly: \(String(standing.prefix(800)))\n"
+        let custom = prefs.string(Prefs.Key.briefingPrompt).trimmingCharacters(in: .whitespacesAndNewlines)
+        let writing = (custom.isEmpty ? Self.defaultBriefingPrompt : String(custom.prefix(4000))).replacingOccurrences(of: "{name}", with: name)
         return """
-        You write \(name)'s daily briefing, a short personal note in warm, plain prose. Anything listed under ALREADY HANDLED BY THE READER must never be mentioned, not even in passing. Now is \(Self.dateString(Date())). Cover, in this order and only if present: what needs attention (deadlines, replies owed), the calendar, the weather in one clause, then the two or three most important news stories with why they matter. 90 to 150 words, one or two paragraphs, no headings, no bullet points, no greeting. Use only facts from the data; never invent.\(skimRule) \(Self.guardrail)\(extra)
+        \(writing)
+        Now is \(Self.dateString(Date())). Anything listed under ALREADY HANDLED BY THE READER must never be mentioned, not even in passing. Use only facts from the data; never invent.\(skimRule) \(Self.guardrail)\(extra)
         """
+    }
+
+    /// A much shorter version of a briefing that keeps its facts and highlights.
+    public func shorten(briefing: String) async throws -> String {
+        let system = "Rewrite this briefing much shorter: at most three sentences and about 50 words. Keep only what matters most, deadlines and replies owed first, then the weather in a few words. Keep the same facts and never add any. Keep the skim tags around the phrases you keep and do not add other markup.\(skimRule) \(Self.guardrail)"
+        return try await ai.complete(.summary, label: "Shorter briefing", AIRequest(system: system, messages: [AIMessage(.user, "<data>\n\(briefing)\n</data>")], maxTokens: 300, temperature: 0.2)).trimmingCharacters(in: .whitespacesAndNewlines).skimLimited(6)
     }
 
     public func briefing(context: String, name: String) async throws -> String {
         let system = briefingSystem(name: name)
-        return try await ai.complete(.summary, label: "Daily briefing", AIRequest(system: system, messages: [AIMessage(.user, "<data>\n\(context)\n</data>" + skimReminder)], maxTokens: 500, temperature: 0.4)).trimmingCharacters(in: .whitespacesAndNewlines).skimLimited(8)
+        return try await ai.complete(.summary, label: "Daily briefing", AIRequest(system: system, messages: [AIMessage(.user, "<data>\n\(context)\n</data>" + skimReminder)], maxTokens: 500, temperature: 0.4)).trimmingCharacters(in: .whitespacesAndNewlines).skimLimited(10)
     }
 
     /// Same briefing, streamed so the text can appear as it is written.

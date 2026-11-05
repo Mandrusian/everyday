@@ -27,7 +27,7 @@ public final class MailService: @unchecked Sendable {
         self.intel = intelligence; self.prefs = prefs
     }
 
-    /// Which backend is active. Existing Gmail API sign-ins keep working; new setups use IMAP.
+    /// Which kind of account came first. Existing Gmail API sign-ins keep working; new setups use IMAP.
     public var kind: MailBackendKind {
         get {
             if let k = MailBackendKind(rawValue: prefs.string("mail.backend")) { return k }
@@ -35,26 +35,62 @@ public final class MailService: @unchecked Sendable {
         }
         set { prefs.set(newValue.rawValue, "mail.backend") }
     }
-    public var backend: MailBackend { kind == .gmailAPI ? gmail : imap }
-    public var isConnected: Bool { backend.isConnected }
+
+    /// Every connected account, the first one first. Each message remembers which of these it came from.
+    public var backends: [MailBackend] {
+        let imaps: [MailBackend] = ImapAccounts.load(prefs).map { imap.bound(to: $0.email) }.filter(\.isConnected)
+        let g: [MailBackend] = gmail.isConnected ? [gmail] : []
+        return kind == .gmailAPI ? g + imaps : imaps + g
+    }
+    /// The first account. Kept for screens and checks that only need one.
+    public var backend: MailBackend { backends.first ?? (kind == .gmailAPI ? gmail : imap) }
+    public var isConnected: Bool { !backends.isEmpty }
     public var accountEmail: String? { backend.accountEmail }
+    public var accountEmails: [String] { backends.compactMap(\.accountEmail) }
     public var lastSync: Date? { (try? db.get("meta", id: "mailLastSync", as: Date.self)) }
+    public func lastSync(for email: String) -> Date? { (try? db.get("meta", id: "mailLastSync.\(email.lowercased())", as: Date.self)) ?? (email == accountEmail ? lastSync : nil) }
+
+    /// Which account a message belongs to. Mail stored before multiple accounts belongs to the first.
+    public func owner(_ m: EmailMessage) -> String { (m.account ?? accountEmail ?? "").lowercased() }
+    public func backend(for m: EmailMessage) -> MailBackend {
+        let o = owner(m)
+        return backends.first { ($0.accountEmail ?? "").lowercased() == o } ?? backend
+    }
+    /// The first account keeps the original sync key so an existing mailbox is not fetched again.
+    private func stateKey(_ b: MailBackend) -> String {
+        guard let e = b.accountEmail?.lowercased(), e != accountEmail?.lowercased() else { return "mailSyncState" }
+        return "mailSyncState.\(e)"
+    }
 
     // MARK: Sync
 
+    /// Syncs every account. One account failing does not stop the others; the first error is reported afterwards.
     public func sync(progress: (@Sendable (String) -> Void)? = nil) async throws -> Int {
-        guard isConnected else { return 0 }
+        let all = backends
+        guard !all.isEmpty else { return 0 }
         let days = Int(prefs.double(Prefs.Key.syncDays, default: 30))
-        let state: String? = try db.get("meta", id: "mailSyncState")
-        let known = emails(limit: 5000)
-        let batch = try await backend.sync(days: days, known: known, state: state, progress: progress)
-        for id in batch.removedIDs { removeLocal(id) }
-        for m in batch.upserts { store(m) }
+        var changed = 0
+        var firstError: Error?
+        for b in all {
+            guard let email = b.accountEmail?.lowercased() else { continue }
+            do {
+                let key = stateKey(b)
+                let state: String? = try db.get("meta", id: key)
+                let known = emails(limit: 5000).filter { owner($0) == email }
+                let label = all.count > 1 ? "\(email): " : ""
+                let batch = try await b.sync(days: days, known: known, state: state, progress: progress.map { p in { @Sendable in p(label + $0) } })
+                for id in batch.removedIDs { removeLocal(id) }
+                for var m in batch.upserts { m.account = email; store(m) }
+                if let st = batch.state { try db.put("meta", id: key, st) }
+                try db.put("meta", id: "mailLastSync.\(email)", Date())
+                changed += batch.upserts.count + batch.removedIDs.count
+            } catch { if firstError == nil { firstError = error } }
+        }
         let cutoff = Date().addingTimeInterval(-Double(days) * 86400)
         _ = try? db.exec("DELETE FROM docs WHERE kind='email' AND sort < ?", [.double(cutoff.timeIntervalSince1970)])
-        if let st = batch.state { try db.put("meta", id: "mailSyncState", st) }
         try db.put("meta", id: "mailLastSync", Date())
-        return batch.upserts.count + batch.removedIDs.count
+        if let e = firstError { throw e }
+        return changed
     }
 
     private func store(_ m: EmailMessage) {
@@ -67,12 +103,33 @@ public final class MailService: @unchecked Sendable {
         _ = try? db.exec("DELETE FROM mail_fts WHERE id=?", [.text(id)])
     }
 
+    /// Disconnects every account.
     public func disconnect(wipe: Bool) {
-        if kind == .gmailAPI { gmail.signOut() } else { imap.remove() }
+        for e in accountEmails { disconnect(email: e, wipe: wipe) }
+        gmail.signOut(); imap.remove()
         prefs.remove("mail.backend")
         for k in ["mailSyncState", "mailHistoryId", "mailLastSync"] { try? db.delete("meta", id: k) }
         if wipe { for k in ["email", "triage", "threadSummary", "replyDraft", "taskSuggestion", "handledThread"] { try? db.deleteAll(k) }; _ = try? db.exec("DELETE FROM mail_fts") }
     }
+
+    /// Disconnects one account. With `wipe`, its stored mail is deleted from this Mac; nothing changes in the account itself.
+    public func disconnect(email: String, wipe: Bool) {
+        let e = email.lowercased()
+        let wasFirst = e == accountEmail?.lowercased()
+        let mine = emails(limit: 5000, inboxOnly: false).filter { owner($0) == e }
+        if wipe { for m in mine { removeLocal(m.id) } }
+        else if wasFirst { for var m in mine where m.account == nil { m.account = e; store(m) } }   // keep ownership once the first account changes
+        try? db.delete("meta", id: stateKey(for: e, first: wasFirst)); try? db.delete("meta", id: "mailLastSync.\(e)")
+        if (gmail.accountEmail ?? "").lowercased() == e { gmail.signOut() } else { imap.bound(to: e).remove() }
+        if wasFirst {
+            prefs.remove("mail.backend")
+            // The next account becomes the first; move its sync state to the shared key.
+            if let next = backends.first?.accountEmail?.lowercased(), let st: String = try? db.get("meta", id: "mailSyncState.\(next)") {
+                try? db.put("meta", id: "mailSyncState", st); try? db.delete("meta", id: "mailSyncState.\(next)")
+            }
+        }
+    }
+    private func stateKey(for e: String, first: Bool) -> String { first ? "mailSyncState" : "mailSyncState.\(e)" }
 
     // MARK: Attachments
 
@@ -90,7 +147,7 @@ public final class MailService: @unchecked Sendable {
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let url = dir.appendingPathComponent(Self.safeFileName(name))
         if FileManager.default.fileExists(atPath: url.path) { return url }
-        let data = try await backend.attachmentData(m, name: name)
+        let data = try await backend(for: m).attachmentData(m, name: name)
         try data.write(to: url, options: .atomic)
         return url
     }
@@ -177,7 +234,10 @@ public final class MailService: @unchecked Sendable {
 
     // MARK: Reading
 
-    public func emails(limit: Int = 400) -> [EmailMessage] { ((try? db.all("email", limit: limit, as: EmailMessage.self)) ?? []).filter(\.inInbox) }
+    public func emails(limit: Int = 400, inboxOnly: Bool = true) -> [EmailMessage] {
+        let all = (try? db.all("email", limit: limit, as: EmailMessage.self)) ?? []
+        return inboxOnly ? all.filter(\.inInbox) : all
+    }
     public func triage(for id: String) -> Triage? { try? db.get("triage", id: id) }
     public func allTriage() -> [String: Triage] {
         let t: [Triage] = (try? db.all("triage", limit: 10000)) ?? []
@@ -326,8 +386,12 @@ public final class MailService: @unchecked Sendable {
     }
     public func restore(_ msgs: [EmailMessage]) { for m in msgs { store(m) } }
 
-    public func commitArchive(_ msgs: [EmailMessage], _ approval: UserApproval) async throws { try await backend.archive(msgs.filter(\.inInbox)) }
-    public func commitTrash(_ msgs: [EmailMessage], _ approval: UserApproval) async throws { try await backend.trash(msgs) }
+    /// Groups messages by the account they came from, so each server is only told about its own mail.
+    private func byAccount(_ msgs: [EmailMessage]) -> [(MailBackend, [EmailMessage])] {
+        Dictionary(grouping: msgs) { owner($0) }.map { (_, group) in (backend(for: group[0]), group) }
+    }
+    public func commitArchive(_ msgs: [EmailMessage], _ approval: UserApproval) async throws { for (b, g) in byAccount(msgs.filter(\.inInbox)) { try await b.archive(g) } }
+    public func commitTrash(_ msgs: [EmailMessage], _ approval: UserApproval) async throws { for (b, g) in byAccount(msgs) { try await b.trash(g) } }
 
     /// Marks a conversation read locally and returns the unread messages it changed.
     public func setReadLocally(threadId: String) -> [EmailMessage] {
@@ -335,7 +399,7 @@ public final class MailService: @unchecked Sendable {
         for m in unread { var x = m; x.labelIds.removeAll { $0 == "UNREAD" }; store(x) }
         return unread
     }
-    public func commitMarkRead(_ msgs: [EmailMessage], _ approval: UserApproval) async throws { try await backend.markRead(msgs) }
+    public func commitMarkRead(_ msgs: [EmailMessage], _ approval: UserApproval) async throws { for (b, g) in byAccount(msgs) { try await b.markRead(g) } }
 
     public func archive(threadId: String, _ approval: UserApproval) async throws {
         let msgs = removeLocally(threadId: threadId)
@@ -352,17 +416,17 @@ public final class MailService: @unchecked Sendable {
 
     private func replyTarget(_ threadId: String) -> EmailMessage? {
         let t = thread(threadId)
-        let me = (accountEmail ?? "").lowercased()
-        return t.last(where: { $0.fromAddress.lowercased() != me }) ?? t.last
+        let mine = Set(accountEmails.map { $0.lowercased() })
+        return t.last(where: { !mine.contains($0.fromAddress.lowercased()) }) ?? t.last
     }
 
     public func saveDraft(threadId: String, body: String, _ approval: UserApproval) async throws {
         guard let m = replyTarget(threadId) else { return }
-        try await backend.saveDraft(replyingTo: m, body: body)
+        try await backend(for: m).saveDraft(replyingTo: m, body: body)
     }
 
     public func sendReply(threadId: String, body: String, _ approval: UserApproval) async throws {
         guard let m = replyTarget(threadId) else { return }
-        try await backend.sendReply(replyingTo: m, body: body)
+        try await backend(for: m).sendReply(replyingTo: m, body: body)
     }
 }

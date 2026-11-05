@@ -90,8 +90,9 @@ struct MailSetupView: View {
         let pw = password.components(separatedBy: .whitespacesAndNewlines).joined()
         do {
             let count = try await ImapBackend.test(account: acct, password: pw)
+            let first = !model.mail.isConnected
             try model.mail.imap.save(account: acct, password: pw)
-            model.mail.kind = .imap
+            if first { model.mail.kind = .imap }
             password = ""
             model.say("Connected to \(addr). \(count) messages in the inbox.")
             onConnected()
@@ -107,8 +108,9 @@ struct MailSetupView: View {
         connectingGoogle = true; defer { connectingGoogle = false }
         model.auth.clientID = clientID; model.auth.clientSecret = clientSecret
         do {
+            let first = !model.mail.isConnected
             _ = try await model.auth.signIn { NSWorkspace.shared.open($0) }
-            model.mail.kind = .gmailAPI
+            if first { model.mail.kind = .gmailAPI }
             NSApp.activate(ignoringOtherApps: true)
             model.say("Gmail connected.")
             onConnected()

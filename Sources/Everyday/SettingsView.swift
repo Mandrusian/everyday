@@ -18,6 +18,7 @@ struct SettingsView: View {
         .privacy: "privacy delete data keychain redact local",
         .notifications: "notifications reminders alerts briefing time",
         .appearance: "appearance theme dark light highlight skim colours font size motion",
+        .advanced: "advanced prompt briefing instructions system custom edit reset",
     ]
     private var matches: [SettingsPane] {
         let q = query.trimmingCharacters(in: .whitespaces).lowercased()
@@ -64,6 +65,7 @@ struct SettingsView: View {
                         case .privacy: PrivacyPane()
                         case .notifications: NotificationsPane()
                         case .appearance: AppearancePane()
+                        case .advanced: AdvancedPane()
                         }
                     }.padding(.horizontal, 40).padding(.vertical, 28).frame(maxWidth: 760, alignment: .leading).frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -284,23 +286,59 @@ struct VoicePane: View {
     }
 }
 
+/// For people who want full control: the instructions the AI follows when it writes the briefing.
+struct AdvancedPane: View {
+    @Environment(AppModel.self) private var model
+    @Local private var prompt = Prefs.shared.string(Prefs.Key.briefingPrompt).isEmpty ? Intelligence.defaultBriefingPrompt : Prefs.shared.string(Prefs.Key.briefingPrompt)
+    private var isDefault: Bool { prompt.trimmingCharacters(in: .whitespacesAndNewlines) == Intelligence.defaultBriefingPrompt }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SectionLabel("Briefing prompt")
+            Text("The instructions the AI follows when it writes your briefing. “{name}” becomes your first name. Your standing instructions from Settings → Briefing are still added, and so are the rules that keep handled mail out and stop the AI from following instructions hidden in emails. Those can't be edited.").font(.ui(14.5)).foregroundStyle(Palette.text2)
+            TextEditor(text: $prompt).accessibilityLabel("Briefing prompt").font(.system(size: 14, design: .monospaced)).scrollContentBackground(.hidden).padding(10).frame(minHeight: 220)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Palette.raised))
+                .onChange(of: prompt) { _, v in
+                    let t = v.trimmingCharacters(in: .whitespacesAndNewlines)
+                    model.prefs.set(t == Intelligence.defaultBriefingPrompt ? "" : t, Prefs.Key.briefingPrompt)
+                }
+            HStack(spacing: 10) {
+                Button(model.generatingBriefing ? "Writing…" : "Write the briefing with this prompt") { Task { await model.generateBriefing() } }.buttonStyle(PrimaryButtonStyle()).disabled(model.generatingBriefing || prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                Button("Reset to default") { prompt = Intelligence.defaultBriefingPrompt }.buttonStyle(QuietButtonStyle()).disabled(isDefault)
+                Spacer()
+            }
+            if prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { Text("An empty prompt uses the default.").font(.ui(13.5)).foregroundStyle(Palette.text3) }
+            Text("\(prompt.count) characters. Longer than 4,000 is cut off.").font(.ui(13)).foregroundStyle(prompt.count > 4000 ? Palette.alertFG : Palette.text3)
+        }
+    }
+}
+
 struct AccountsPane: View {
     @Environment(AppModel.self) private var model
-    @Local private var confirmDisconnect = false
+    @Local private var removing: String? = nil
+    @Local private var adding = false
     @Local private var tick = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             SectionLabel("Mail")
-            if model.mail.isConnected {
-                Row(title: model.mail.accountEmail ?? "Connected", detail: (model.mail.kind == .imap ? "IMAP" : "Gmail API") + " · " + (model.mail.lastSync.map { "last synced \($0.formatted(date: .abbreviated, time: .shortened))" } ?? "not synced yet")) {
-                    Button(model.syncingMail ? "Syncing…" : "Sync now") { Task { await model.syncMail() } }.buttonStyle(QuietButtonStyle()).disabled(model.syncingMail)
-                    Button("Disconnect") { confirmDisconnect = true }.buttonStyle(QuietButtonStyle())
+            let emails = model.mail.accountEmails
+            if emails.isEmpty || adding {
+                Text(emails.isEmpty ? "Connect any mail account with an app password. It takes about a minute and nothing passes through a server of ours." : "Add another account. Its mail joins the same inbox and briefing, and replies go out from the account the mail arrived in.").font(.ui(15.5)).foregroundStyle(Palette.text2)
+                MailSetupView { adding = false; tick += 1 }
+                if adding { Button("Cancel") { adding = false }.buttonStyle(QuietButtonStyle(compact: true)) }
+            }
+            if !emails.isEmpty {
+                ForEach(Array(emails.enumerated()), id: \.element) { i, e in
+                    Row(title: e, detail: kindLabel(e) + (i == 0 && emails.count > 1 ? " · first account" : "") + " · " + (model.mail.lastSync(for: e).map { "last synced \($0.formatted(date: .abbreviated, time: .shortened))" } ?? "not synced yet")) {
+                        Button("Remove") { removing = e }.buttonStyle(QuietButtonStyle(compact: true))
+                    }
+                }
+                HStack(spacing: 10) {
+                    Button(model.syncingMail ? "Syncing…" : (emails.count > 1 ? "Sync all" : "Sync now")) { Task { await model.syncMail() } }.buttonStyle(QuietButtonStyle()).disabled(model.syncingMail)
+                    if !adding { Button("Add another account") { withAnimation(Motion.snappy) { adding = true } }.buttonStyle(QuietButtonStyle()) }
                 }
                 if !model.mailProgress.isEmpty { Text(model.mailProgress).font(.ui(14)).foregroundStyle(Palette.text2) }
-            } else {
-                Text("Connect any mail account with an app password. It takes about a minute and nothing passes through a server of ours.").font(.ui(15.5)).foregroundStyle(Palette.text2)
-                MailSetupView { tick += 1 }
             }
             Hairline().padding(.vertical, 6)
             SectionLabel("System access")
@@ -308,12 +346,15 @@ struct AccountsPane: View {
             Row(title: "Reminders", detail: "Optional two-way sync for tasks.") { permission(model.calendar.reminderAccess) { _ = await model.calendar.requestReminders() } }
         }
         .id(tick)
-        .confirmationDialog("Disconnect mail?", isPresented: $confirmDisconnect, titleVisibility: .visible) {
-            Button("Disconnect and keep local mail") { model.mail.disconnect(wipe: false); model.reloadLocal(); tick += 1 }
-            Button("Disconnect and delete local mail", role: .destructive) { model.mail.disconnect(wipe: true); model.reloadLocal(); tick += 1 }
-            Button("Cancel", role: .cancel) {}
-        } message: { Text("Nothing in your mail account is changed.") }
+        .confirmationDialog("Remove \(removing ?? "this account")?", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }), titleVisibility: .visible) {
+            Button("Remove and keep its mail on this Mac") { if let e = removing { model.mail.disconnect(email: e, wipe: false) }; done() }
+            Button("Remove and delete its mail from this Mac", role: .destructive) { if let e = removing { model.mail.disconnect(email: e, wipe: true) }; done() }
+            Button("Cancel", role: .cancel) { removing = nil }
+        } message: { Text("Nothing in the mail account itself is changed.") }
     }
+
+    private func done() { removing = nil; model.reloadLocal(); tick += 1 }
+    private func kindLabel(_ e: String) -> String { (model.mail.gmail.accountEmail ?? "").lowercased() == e.lowercased() ? "Gmail API" : "IMAP" }
 
     @ViewBuilder private func permission(_ a: CalendarService.Access, request: @escaping () async -> Void) -> some View {
         switch a {
@@ -656,7 +697,7 @@ struct AppearancePane: View {
             }
             VStack(alignment: .leading, spacing: 6) {
                 Text("Preview").font(.ui(12, .semibold)).tracking(1.2).foregroundStyle(Palette.text3)
-                SkimBody(text: "<<u|Sign the lease renewal>> by <<d|Friday 6 November>>. <<p|Oscar>> is waiting on a reply about the roadmap sync, and <<n|$1,240>> is due to <<p|Studio Kite>> by <<d|12 November>>. Rain clears by noon in <<n|Cairns>>.", size: 17)
+                SkimBody(text: "<<u|Final notice>>: <<a|sign the lease renewal>> by <<d|Friday 6 November>>. <<p|Oscar Fox>> is waiting on a reply about the roadmap sync, and <<m|$1,240>> is due to <<p|Studio Kite>> by <<d|12 November>>. Rain clears by noon in <<l|Cairns>>, heading to <<n|31°C>>.", size: 17)
                     .padding(16).frame(maxWidth: .infinity, alignment: .leading).background(RoundedRectangle(cornerRadius: 8).fill(Palette.raised))
             }
         }

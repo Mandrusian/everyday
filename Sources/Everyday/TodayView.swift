@@ -98,6 +98,15 @@ struct TodayView: View {
 
     private var briefingText: String? { model.briefingLive.flatMap { $0.isEmpty ? nil : $0 } ?? model.briefing?.text }
 
+    /// "Drawn from 2 emails and 4 stories." Parts with nothing in them are left out.
+    static func drawnFrom(_ b: Briefing) -> String {
+        func n(_ c: Int, _ one: String) -> String? { c == 0 ? nil : "\(c) \(one)\(c == 1 ? "" : "s")" }
+        let parts = [n(b.emailCount, "email"), n(b.storyCount, "story").map { $0.replacingOccurrences(of: "storys", with: "stories") }, n(b.eventCount, "event")].compactMap { $0 }
+        guard !parts.isEmpty else { return "Written from your settings." }
+        let list = parts.count == 1 ? parts[0] : parts.dropLast().joined(separator: ", ") + " and " + parts.last!
+        return "Drawn from \(list)." + (b.fullText != nil ? " Showing the short version." : "")
+    }
+
     private var briefingSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
@@ -108,13 +117,16 @@ struct TodayView: View {
                 if model.briefing != nil {
                     Button { model.skim.toggle() } label: { Label("Highlights", systemImage: "highlighter") }.buttonStyle(QuietButtonStyle(compact: true, selected: model.skim)).fixedSize().help("Colour the key phrases for skim reading")
                     ListenButton(owner: "briefing", chunks: { [SkimMarkup.strip(model.briefing?.text ?? "")] })
+                    Button(model.shorteningBriefing ? "Shortening…" : (model.briefing?.fullText != nil ? "Full length" : "Shorter")) { Task { await model.toggleShortBriefing() } }
+                        .buttonStyle(QuietButtonStyle(compact: true, selected: model.briefing?.fullText != nil)).fixedSize().disabled(model.shorteningBriefing || model.generatingBriefing)
+                        .help(model.briefing?.fullText != nil ? "Show the full briefing again" : "Summarise the briefing in a few sentences")
                 }
                 Button(model.briefing == nil ? "Write briefing" : "Rewrite") { Task { await model.generateBriefing() } }
                     .buttonStyle(QuietButtonStyle(compact: true)).disabled(model.generatingBriefing)
             }
             if let text = briefingText {
                 SkimBody(text: text, size: 18, smooth: model.generatingBriefing)
-                if !model.generatingBriefing, let b = model.briefing { Text("Drawn from \(b.emailCount) emails, \(b.storyCount) stories and \(b.eventCount) events.").font(.ui(13.5)).foregroundStyle(Palette.text3).transition(.opacity) }
+                if !model.generatingBriefing, let b = model.briefing { Text(Self.drawnFrom(b)).font(.ui(13.5)).foregroundStyle(Palette.text3).transition(.opacity) }
             } else if model.generatingBriefing {
                 HStack(spacing: 8) { ProgressView().controlSize(.small); Text("Reading your mail and the news…").font(.ui(15)).foregroundStyle(Palette.text2) }
             } else if !model.ai.isConfigured {

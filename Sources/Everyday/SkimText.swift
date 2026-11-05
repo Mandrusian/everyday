@@ -6,13 +6,19 @@ extension SkimMarkup.Kind {
     var color: Color {
         switch self {
         case .urgent: return Palette.alertFG
+        case .action: return Palette.clayText
         case .date: return Palette.amber
         case .person: return Palette.infoFG
+        case .money: return Palette.teal
         case .number: return Palette.good
+        case .place: return Palette.lavender
         }
     }
     var title: String {
-        switch self { case .urgent: "Urgent or deadline"; case .date: "Dates and times"; case .person: "People and organisations"; case .number: "Amounts, numbers and places" }
+        switch self {
+        case .urgent: "Urgent or deadline"; case .action: "Things to do"; case .date: "Dates and times"; case .person: "People and organisations"
+        case .money: "Money"; case .number: "Numbers"; case .place: "Places"
+        }
     }
 }
 
@@ -77,8 +83,8 @@ struct SkimBody: View {
 /// Colour key shown in Settings and from the briefing header.
 struct SkimLegend: View {
     var body: some View {
-        HStack(spacing: 14) {
-            ForEach([SkimMarkup.Kind.urgent, .date, .person, .number], id: \.rawValue) { k in
+        FlowLayout(spacing: 14) {
+            ForEach(SkimMarkup.Kind.allCases, id: \.rawValue) { k in
                 HStack(spacing: 6) {
                     RoundedRectangle(cornerRadius: 3).fill(k.color.opacity(0.35)).overlay(RoundedRectangle(cornerRadius: 3).stroke(k.color)).frame(width: 14, height: 14)
                     Text(k.title).font(.ui(13)).foregroundStyle(Palette.text2)
