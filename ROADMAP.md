@@ -71,7 +71,7 @@ Help
 
 ### M4 — Ship
 Repository
-- LICENSE (decide: MIT or GPL-3.0), README with 3-command build, CONTRIBUTING, SECURITY, privacy statement, no secrets or personal data in history.
+- LICENSE (GPL-3.0), README with 3-command build, CONTRIBUTING, SECURITY, privacy statement, no secrets or personal data in history.
 - `Scripts/release.sh`: universal binary (arm64 + x86_64), bundle, ad-hoc sign, DMG, SHA-256.
 Site (everyday.mandrusia.tech)
 - One page: what it is, screenshots, download, privacy, build-from-source link, Open Anyway instructions with screenshots, privacy policy.

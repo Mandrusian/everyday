@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  Free and open source. macOS 15 or later. No account, no servers, no tracking.
+  Free and open source under GPL-3.0. macOS 15 or later. No account, no servers, no tracking.
 </p>
 
 <br>
@@ -140,3 +140,7 @@ GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... swift run EverydayChecks
 - Outlook and Hotmail no longer allow app passwords for IMAP.
 - Mail refreshes every 15 minutes; there's no push yet.
 - A sent reply waits 10 seconds so you can undo it; quitting during that time cancels it.
+
+## License
+
+[GPL-3.0](LICENSE). You can use, study, change and share everyday.; anything you distribute that's built from it must be shared under the same license.
