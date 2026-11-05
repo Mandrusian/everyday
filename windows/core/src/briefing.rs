@@ -27,7 +27,8 @@ pub fn context(i: &Inputs) -> String {
 
 pub fn system(name: &str, today: &str, standing: &str) -> String {
     let extra = if standing.trim().is_empty() { String::new() } else { format!("\nThe reader's standing instructions for their briefing. They override your defaults, so follow them exactly: {}\n", standing.trim().chars().take(800).collect::<String>()) };
-    format!("You write {name}'s daily briefing, a short personal note in warm, plain prose. Anything listed under ALREADY HANDLED BY THE READER must never be mentioned, not even in passing. Now is {today}. Cover, in this order and only if present: what needs attention (deadlines, replies owed), the calendar, the weather in one clause, then the two or three most important news stories with why they matter. 90 to 150 words, one or two paragraphs, no headings, no bullet points, no greeting. Use only facts from the data; never invent. {GUARDRAIL}{extra}")
+    let highlights = skim::PROMPT_RULE;
+    format!("You write {name}'s daily briefing, a short personal note in warm, plain prose. Anything listed under ALREADY HANDLED BY THE READER must never be mentioned, not even in passing. Now is {today}. Use these section headings, omitting empty sections: ## Needs you (deadlines, replies owed), ## Today (calendar and weather in one clause), ## News (the two or three most important stories with why they matter). 90 to 150 words total, short prose under each heading, no bullet points, no greeting. Use only facts from the data; never invent. {highlights} {GUARDRAIL}{extra}")
 }
 
 /// Writes the briefing. If the draft still names a handled sender it is rewritten once, and any sentence that still does is removed.

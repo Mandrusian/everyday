@@ -1,6 +1,6 @@
 const { invoke } = window.__TAURI__.core;
 const $ = (s, r = document) => r.querySelector(s), main = $("#main");
-const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const { esc, skim, briefing: renderBriefing } = window.EverydayFormat;
 let view = "today", selected = null, state = { email: null, has_ai_key: false }, brief = "", replies = [], used = new Set(), busy = {};
 
 function say(text, undo, secs = 4) {
@@ -8,7 +8,6 @@ function say(text, undo, secs = 4) {
   b.style.display = "flex"; clearTimeout(say.t); say.t = setTimeout(() => b.style.display = "none", secs * 1000);
 }
 const fail = e => say(String(e), null, 7);
-const skim = t => esc(t).replace(/&lt;&lt;([udpn])\|(.*?)&gt;&gt;/g, (_, k, x) => `<span class="${k === "p" ? "pn" : k}">${x}</span>`);
 
 async function refreshState() { state = await invoke("app_state"); $("#status").textContent = state.email ? `${state.email} · click to sync` : "Connect mail in Settings"; }
 $("#status").onclick = async () => { if (!state.email) return show("settings"); say("Syncing…"); try { say(await invoke("sync_mail")); } catch (e) { fail(e); } show(view); };
@@ -38,7 +37,7 @@ async function today() {
   const rows = (await invoke("inbox")).filter(r => r.attention);
   main.innerHTML = `<h1>Good day.</h1><p class="sub">${rows.length ? (rows.length === 1 ? "1 thing needs" : rows.length + " things need") + " you today." : "Nothing urgent right now."} Nothing is sent or deleted without your approval.</p>
   <div class="card" style="padding:18px"><b class="muted" style="font-size:12px;letter-spacing:.1em">DAILY BRIEFING</b>
-  ${brief ? `<div class="brief">${skim(brief)}</div><p><button id="ls">Listen</button></p>` : `<p class="muted">${state.has_ai_key ? "" : "Add a Gemini key in Settings to write briefings. "}<button class="p" id="wb">Write briefing</button></p>`}
+  ${brief ? `<div class="brief">${renderBriefing(brief)}</div><p><button id="ls">Listen</button></p>` : `<p class="muted">${state.has_ai_key ? "" : "Add a Gemini key in Settings to write briefings. "}<button class="p" id="wb">Write briefing</button></p>`}
   <div class="chips">${replies.map((r, i) => used.has(i) ? "" : `<button data-i="${i}">${esc(r.label)}</button>`).join("")}</div></div>
   <div id="up"></div><div class="card">${rows.map(r => `<div class="row"><div class="t"><b>${esc(r.from)}</b>: ${esc(r.subject)}<small>${esc(r.snippet)}</small></div>
     <div><button data-h="${r.thread_id}">That was me</button> <button data-o="${r.thread_id}">Open</button></div></div>`).join("") || '<p class="muted">Nothing needs you.</p>'}</div>`;

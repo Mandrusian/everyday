@@ -10,7 +10,7 @@ window.__TAURI__ = { core: { invoke: async (cmd, a = {}) => { window.__calls.pus
     case "app_state": return { email: "me@example.com", has_ai_key: true };
     case "inbox": return rows.filter(r => !handled.has(r.thread_id));
     case "mark_handled": a.threadIds.forEach(t => handled.add(t)); if (a.threadIds.includes("t2")) handled.add("t2"); return a.threadIds.length;
-    case "make_briefing": return "<<p|Oscar>> needs a reply about the <<u|roadmap sync>> by <<d|Thursday>>." + (handled.has("t2") ? "" : " Google also sent a security alert.");
+    case "make_briefing": return "## Needs you\n<<a|Reply to Oscar>> about the <<u|roadmap sync>> by <<d|Thursday>>." + (handled.has("t2") ? "" : " Google also sent a security alert.") + "\n\n## Today\n<<n|31°C>> in <<l|Cairns>>. Rent is <<m|$240>>.\n\n## News\nSolar had a record year.";
     case "quick_replies": return [{ label: "Add as task", kind: "task", thread_ids: ["t1"], text: "" }].concat(handled.has("t2") ? [] : [{ label: "That was me", kind: "handled", thread_ids: ["t2"], text: "" }]);
     case "upcoming": return [{ title: "Standup", when: "Thu 5 Nov, 09:30", location: "" }];
     case "task_list": return taskStore; case "add_task": taskStore.push({ id: "k" + taskStore.length, title: a.input, due: null, priority: "medium", repeats: null }); return {};

@@ -40,6 +40,12 @@ State of everyday. for whoever picks this up next. Read README.md, ROADMAP.md, W
 - Midnight exposed an existing Quick Add bug: NSDataDetector ignored the supplied `now`. Common relative days (today, tomorrow, tonight, weekdays) now use the supplied date/calendar while retaining detected times. Removed the incorrect “add seven days” adjustment for explicit historical dates. Added leap-day and past-weekday-time checks.
 - Validation so far: full Mac checks passed after these changes (live AI/account/send checks disabled). Further work and final verification will be recorded at handover.
 
+### Windows briefing parity (6 November)
+- Ported all seven highlight kinds to the Rust text helpers and Windows renderer. Dotted/empty/incomplete model tags are cleaned, and untrusted text remains HTML-escaped.
+- Briefing generation now requests `## Needs you`, `## Today`, and `## News`, omitting empty sections. Windows renders these as small section headings and paragraphs. Handled-sender scrubbing preserves headings and drops empty sections; speech/notification text strips headings and highlight tags.
+- Added `windows/app/ui/format.js` shared by production and the browser harness. Removed the stale copied `test/main.js`; the harness loads the production scripts directly. Updated the stub with sectioned samples.
+- Verification: 101 Rust core tests and 5 Node formatting tests pass. Browser harness confirms all three headings and live handling of the sample Google notice without losing sections. Tauri shell compile check and final checks are pending handover.
+
 ### Recommended follow-ups for Claude (review findings, not fixed)
 - Account isolation: IMAP message IDs are account-tagged, but thread IDs are still derived solely from the message's thread key; `MailService.rows()` groups by that thread ID. The same conversation in two accounts can merge and a thread action can affect both. Namespace thread identity by account with an explicit migration for handled threads, snoozes, and drafts.
 - Once correctness is covered, port the briefing sections, highlight kinds, readable mail bodies, security-only front-facing “That was me”, and multi-account behavior to Windows. See the existing next-work list below.

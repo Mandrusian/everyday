@@ -218,7 +218,7 @@ fn load_articles(st: &Store, limit: usize) -> Vec<news::Article> {
     if !(200..300).contains(&status) { return Err(ai::parse_response(ai::Provider::Gemini, status, &body).err().map(|e| e.to_string()).unwrap_or_else(|| "The speech service refused the request.".into())); }
     let wav = tts::wav(&tts::pcm_from_response(&body)?, 24000); let _ = std::fs::write(&file, &wav); Ok(b64.encode(wav))
 }
-#[tauri::command] fn speech_chunks(text: String) -> Vec<String> { tts::chunks(&everyday_core::skim::strip(&text), 220) }
+#[tauri::command] fn speech_chunks(text: String) -> Vec<String> { tts::chunks(&everyday_core::skim::plain(&text), 220) }
 
 /// True once a day from the chosen hour: the UI then writes the briefing and shows a notification.
 #[tauri::command] fn morning_due(a: tauri::State<App>) -> bool {
