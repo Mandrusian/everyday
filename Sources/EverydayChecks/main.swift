@@ -22,8 +22,8 @@ do {
 // Pure helpers
 check("extractJSON fenced", extractJSON("```json\n[{\"a\":1}]\n```") != nil)
 check("extractJSON prose", extractJSON("Sure! {\"x\": 2} done") != nil)
-let red = ContextRedactor.clean("Hi Dana,\nSure thing.\n\n> old quoted\nOn Mon, 3 Nov, Dana wrote:\n> hello\n-- \nXavi")
-check("redactor strips quotes/signature", red == "Hi Dana,\nSure thing.", red)
+let red = ContextRedactor.clean("Hi Oscar,\nSure thing.\n\n> old quoted\nOn Mon, 3 Nov, Oscar wrote:\n> hello\n-- \nXavi")
+check("redactor strips quotes/signature", red == "Hi Oscar,\nSure thing.", red)
 check("html plain", HTMLText.plain("<p>Hello &amp; <b>world</b></p>") == "Hello & world")
 let rss = "<rss><channel><item><title>A &amp; B</title><link>https://x.test/a?utm=1</link><pubDate>Wed, 05 Nov 2026 06:10:00 +0000</pubDate><description><![CDATA[<p>Body <img src=\"https://x.test/i.jpg\"></p>]]></description></item></channel></rss>"
 let items = FeedParser.parse(Data(rss.utf8))
@@ -53,9 +53,9 @@ do {
 
 
 // Skim markup
-let sk = "Pay <<u|the invoice>> by <<d|Friday>>. <<p|Dana>> asked; costs <<n|$1,240>>."
+let sk = "Pay <<u|the invoice>> by <<d|Friday>>. <<p|Oscar>> asked; costs <<n|$1,240>>."
 check("skim: segments tag kinds", SkimMarkup.segments(sk).filter { $0.kind != nil }.map { $0.kind! } == [.urgent, .date, .person, .number])
-check("skim: strip removes tags", SkimMarkup.strip(sk) == "Pay the invoice by Friday. Dana asked; costs $1,240.", SkimMarkup.strip(sk))
+check("skim: strip removes tags", SkimMarkup.strip(sk) == "Pay the invoice by Friday. Oscar asked; costs $1,240.", SkimMarkup.strip(sk))
 check("skim: unclosed tag does not leak", !SkimMarkup.strip("Meeting <<d|Friday at noon").contains("<<"), SkimMarkup.strip("Meeting <<d|Friday at noon"))
 check("skim: limit keeps first N highlights", SkimMarkup.segments(SkimMarkup.limit("<<u|a>> <<d|b>> <<p|c>>", max: 2)).filter { $0.kind != nil }.count == 2 && SkimMarkup.strip(SkimMarkup.limit("<<u|a>> <<d|b>> <<p|c>>", max: 2)) == "a b c")
 check("skim: plain text unchanged", SkimMarkup.strip("Nothing special.") == "Nothing special." && !SkimMarkup.hasTags("Nothing special."))
@@ -88,7 +88,7 @@ do {
     }
     put("a", "t1", "Google", "App password created")
     put("b", "t2", "Google", "App password removed")
-    put("c", "t3", "Dana", "Roadmap sync")
+    put("c", "t3", "Oscar", "Roadmap sync")
     check("attention lists the three before handling", mail.attention(limit: 10).count == 3 && mail.suggestions().count == 3)
     mail.markHandled(threadId: "t3")
     check("markHandled removes it from attention and its suggestion", mail.attention(limit: 10).map(\.message.id).sorted() == ["a", "b"] && mail.suggestions().count == 2)
@@ -111,18 +111,18 @@ do {
         g("g2", "gt2", "Google", "no-reply@accounts.google.com", "App password created")
         g("g3", "gt3", "Google One", "noreply@google.com", "Update your payment details")
         g("g4", "gt4", "Google", "no-reply@accounts.google.com", "App password removed")
-        g("d1", "dt1", "Dana Whitfield", "dana@acme.com.au", "Roadmap sync")
+        g("d1", "dt1", "Oscar Fox", "oscar@acme.com.au", "Roadmap sync")
         let expanded = Set(m2.expandedThreadIDs(["gt1"]))
         check("That was me on one Google notice covers the whole Google group, not people", expanded == ["gt1", "gt2", "gt3", "gt4"], "\(expanded.sorted())")
         for t in expanded { m2.markHandled(threadId: t) }
-        check("after handling the group only the person stays in attention", m2.attention(limit: 10).map(\.message.fromName) == ["Dana Whitfield"], "\(m2.attention(limit: 10).map(\.message.fromName))")
+        check("after handling the group only the person stays in attention", m2.attention(limit: 10).map(\.message.fromName) == ["Oscar Fox"], "\(m2.attention(limit: 10).map(\.message.fromName))")
         let snapText = ContextBuilder(mail: m2, tasks: TaskStore(db: db2), news: NewsService(db: db2, interests: InterestModel(db: db2), prefs: cp2), weather: WeatherService(db: db2, prefs: cp2), calendar: CalendarService(), prefs: cp2).snapshot().text
         let attentionPart = snapText.components(separatedBy: "ALREADY HANDLED").first ?? snapText
-        check("briefing context lists only Dana as needing attention", attentionPart.contains("Dana Whitfield") && !attentionPart.contains("Google"))
+        check("briefing context lists only Oscar as needing attention", attentionPart.contains("Oscar Fox") && !attentionPart.contains("Google"))
         check("briefing context tells the model what is handled", snapText.contains("ALREADY HANDLED BY THE READER") && snapText.contains("Google"))
-        let old = "Update your payment details by Friday. Dana is waiting on a reply about Thursday. Google also sent three notices today. It is 30°C."
+        let old = "Update your payment details by Friday. Oscar is waiting on a reply about Thursday. Google also sent three notices today. It is 30°C."
         let cleaned = Briefing.removingSentences(mentioning: ["Google", "Google One"], from: old)
-        check("sentences naming handled senders are removed", cleaned == "Update your payment details by Friday. Dana is waiting on a reply about Thursday. It is 30°C.", cleaned)
+        check("sentences naming handled senders are removed", cleaned == "Update your payment details by Friday. Oscar is waiting on a reply about Thursday. It is 30°C.", cleaned)
     }
     check("coupon and promo headlines are filtered, real news is not", NewsService.isPromo("Udemy Coupon Codes: 20% Off November 2026") && NewsService.isPromo("Corsair Discount Code: Up to 50% Off") && NewsService.isPromo("The best laptop deals of the week") && !NewsService.isPromo("Uranium cubes reveal why the German nuclear project failed") && !NewsService.isPromo("Open-source models close the gap"))
     do {
@@ -142,7 +142,7 @@ do {
             try? db4.put("email", id: id, sort: Date().timeIntervalSince1970, EmailMessage(id: id, threadId: "t" + id, fromName: from, fromAddress: addr, to: "me", subject: subj, snippet: "", body: "", date: Date(), labelIds: ["INBOX", "UNREAD"], hasAttachments: false))
             try? db4.put("triage", id: id, sort: 20, Triage(messageId: id, category: .newsletter, priority: 20, summary: subj, deadline: nil, actionItems: [], needsReply: false))
         }
-        e("1", "Dana", "dana@acme.com", "Roadmap"); e("2", "Brew", "hi@brew.com", "Weekday briefing")
+        e("1", "Oscar", "oscar@acme.com", "Roadmap"); e("2", "Brew", "hi@brew.com", "Weekday briefing")
         check("snoozed conversations leave the inbox until their time", { m4.snooze(threadId: "t1", until: Date().addingTimeInterval(3600)); return !m4.rows().contains { $0.message.threadId == "t1" } && m4.snoozedCount() == 1 }())
         m4.snooze(threadId: "t1", until: Date().addingTimeInterval(-5))
         let back = m4.rows().first { $0.message.threadId == "t1" }
@@ -187,12 +187,12 @@ do {
         let d = { (h: Int, day: Int) in cal.date(from: DateComponents(year: 2026, month: 11, day: day, hour: h, minute: 5))! }
         check("morning briefing waits for the chosen hour", !BriefingSchedule.shouldSend(now: d(6, 5), hour: 7, lastSent: "", calendar: cal) && BriefingSchedule.shouldSend(now: d(7, 5), hour: 7, lastSent: "", calendar: cal))
         check("morning briefing sends once a day, and again the next day", !BriefingSchedule.shouldSend(now: d(9, 5), hour: 7, lastSent: BriefingSchedule.dayKey(d(7, 5), calendar: cal), calendar: cal) && BriefingSchedule.shouldSend(now: d(7, 6), hour: 7, lastSent: BriefingSchedule.dayKey(d(7, 5), calendar: cal), calendar: cal))
-        check("notification preview drops tags and ends on a sentence", BriefingSchedule.preview("<<u|Pay rent>> by <<d|Friday>>. Dana needs a reply about the Thursday roadmap sync and wants the agenda confirmed before the meeting starts later today at noon.", limit: 60) == "Pay rent by Friday.", BriefingSchedule.preview("<<u|Pay rent>> by <<d|Friday>>. Dana needs a reply about the Thursday roadmap sync and wants the agenda confirmed before the meeting starts later today at noon.", limit: 60))
+        check("notification preview drops tags and ends on a sentence", BriefingSchedule.preview("<<u|Pay rent>> by <<d|Friday>>. Oscar needs a reply about the Thursday roadmap sync and wants the agenda confirmed before the meeting starts later today at noon.", limit: 60) == "Pay rent by Friday.", BriefingSchedule.preview("<<u|Pay rent>> by <<d|Friday>>. Oscar needs a reply about the Thursday roadmap sync and wants the agenda confirmed before the meeting starts later today at noon.", limit: 60))
     }
     do {
-        let src = [ChatSource(tag: "M1", title: "Dana: Roadmap", kind: .mail, ref: "t1"), ChatSource(tag: "N2", title: "Solar record", kind: .news, ref: "s2"), ChatSource(tag: "M3", title: "x", kind: .mail, ref: "t3")]
-        let r = Citations.resolve("Dana wants a reply [M1]. Solar is up [N2, M1] and nothing else [M9].", sources: src)
-        check("citations: tags resolve in order of appearance, unknown tags are ignored, text is cleaned", r.cited.map(\.tag) == ["M1", "N2"] && r.text == "Dana wants a reply. Solar is up and nothing else.", "\(r.cited.map(\.tag)) \(r.text)")
+        let src = [ChatSource(tag: "M1", title: "Oscar: Roadmap", kind: .mail, ref: "t1"), ChatSource(tag: "N2", title: "Solar record", kind: .news, ref: "s2"), ChatSource(tag: "M3", title: "x", kind: .mail, ref: "t3")]
+        let r = Citations.resolve("Oscar wants a reply [M1]. Solar is up [N2, M1] and nothing else [M9].", sources: src)
+        check("citations: tags resolve in order of appearance, unknown tags are ignored, text is cleaned", r.cited.map(\.tag) == ["M1", "N2"] && r.text == "Oscar wants a reply. Solar is up and nothing else.", "\(r.cited.map(\.tag)) \(r.text)")
     }
     do {
         // Mail, tasks and chat saved by earlier versions must keep loading after new fields are added.
@@ -225,14 +225,14 @@ do {
 
 
 // Bundling repeated automated mail
-check("domainKey collapses subdomains", MailBundler.domainKey("no-reply@accounts.google.com") == "google.com" && MailBundler.domainKey("a@mail.example.com.au") == "example.com.au" && MailBundler.domainKey("dana@example.org") == "example.org")
+check("domainKey collapses subdomains", MailBundler.domainKey("no-reply@accounts.google.com") == "google.com" && MailBundler.domainKey("a@mail.example.com.au") == "example.com.au" && MailBundler.domainKey("oscar@example.org") == "example.org")
 do {
     func row(_ id: String, _ addr: String, _ name: String, _ subj: String, cat: TriageCategory = .important, pr: Int = 60, minsAgo: Double = 0) -> MailRow {
         let m = EmailMessage(id: id, threadId: "t" + id, fromName: name, fromAddress: addr, to: "me", subject: subj, snippet: "", body: "", date: Date().addingTimeInterval(-minsAgo * 60), labelIds: ["INBOX"], hasAttachments: false)
         return MailRow(message: m, triage: Triage(messageId: id, category: cat, priority: pr, summary: subj), threadCount: 1)
     }
     let rows = [row("1", "no-reply@accounts.google.com", "Google", "App password created", pr: 80), row("2", "no-reply@accounts.google.com", "Google", "App password removed", minsAgo: 5),
-                row("3", "noreply@google.com", "Google", "Security alert", minsAgo: 9), row("4", "dana@example.com", "Dana", "Roadmap", pr: 85), row("5", "dana@example.com", "Dana", "Lunch", minsAgo: 2), row("6", "dana@example.com", "Dana", "Invoice", minsAgo: 4),
+                row("3", "noreply@google.com", "Google", "Security alert", minsAgo: 9), row("4", "oscar@example.com", "Oscar", "Roadmap", pr: 85), row("5", "oscar@example.com", "Oscar", "Lunch", minsAgo: 2), row("6", "oscar@example.com", "Oscar", "Invoice", minsAgo: 4),
                 row("7", "no-reply@shop.example.com", "Shop", "Order shipped")]
     let bs = MailBundler.bundles(from: rows)
     check("bundles: three Google alerts become one bundle; people and singles stay separate", bs.count == 1 && bs[0].title == "Google" && bs[0].count == 3 && bs[0].priority == 80, "\(bs.map { "\($0.title):\($0.count)" })")
@@ -263,10 +263,10 @@ do {
 // Gmail payload parsing
 let b64 = { (s: String) in Data(s.utf8).base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "") }
 let payload: [String: Any] = ["id": "m9", "threadId": "t9", "snippet": "Hi &amp; hello", "internalDate": "1793000000000", "labelIds": ["INBOX", "UNREAD"],
-  "payload": ["mimeType": "multipart/alternative", "headers": [["name": "From", "value": "Dana Whitfield <dana@example.com>"], ["name": "Subject", "value": "Roadmap"], ["name": "Message-ID", "value": "<abc@x>"]],
+  "payload": ["mimeType": "multipart/alternative", "headers": [["name": "From", "value": "Oscar Fox <oscar@example.com>"], ["name": "Subject", "value": "Roadmap"], ["name": "Message-ID", "value": "<abc@x>"]],
               "parts": [["mimeType": "text/plain", "body": ["data": b64("Plain body")]], ["mimeType": "text/html", "body": ["data": b64("<p>HTML body</p>")]], ["mimeType": "application/pdf", "filename": "a.pdf", "body": [:]]]]]
 if let m = try? GmailClient.parse(payload) {
-    check("gmail parse", m.fromName == "Dana Whitfield" && m.fromAddress == "dana@example.com" && m.body == "Plain body" && m.hasAttachments && m.isUnread && m.inInbox, "\(m.fromName)|\(m.body)")
+    check("gmail parse", m.fromName == "Oscar Fox" && m.fromAddress == "oscar@example.com" && m.body == "Plain body" && m.hasAttachments && m.isUnread && m.inInbox, "\(m.fromName)|\(m.body)")
     let composed = MailComposer.build(from: "me@example.com", to: MailComposer.replyRecipient(m, me: "me@example.com"), subject: MailComposer.replySubject(m.subject), body: "Thanks", inReplyTo: m.messageIdHeader, domain: "example.com")
     let parsedBack = MIME.parse(composed)
     check("composed reply round-trips (headers, base64 body)", parsedBack.subject == "Re: Roadmap" && parsedBack.inReplyTo == "<abc@x>" && parsedBack.body.trimmingCharacters(in: .whitespacesAndNewlines) == "Thanks" && parsedBack.fromAddress == "me@example.com", "\(parsedBack.subject)|\(parsedBack.body)")
@@ -320,7 +320,7 @@ do {
     try await srv.start()
     defer { srv.stop() }
     func raw(_ id: String, _ subj: String, _ body: String, ref: String = "") -> String {
-        "From: Dana <dana@example.com>\nTo: me@example.com\nSubject: \(subj)\nDate: Wed, 05 Nov 2026 06:10:00 +0000\nMessage-ID: <\(id)@x>\n\(ref)Content-Type: text/plain; charset=utf-8\n\n\(body)\n"
+        "From: Oscar <oscar@example.com>\nTo: me@example.com\nSubject: \(subj)\nDate: Wed, 05 Nov 2026 06:10:00 +0000\nMessage-ID: <\(id)@x>\n\(ref)Content-Type: text/plain; charset=utf-8\n\n\(body)\n"
     }
     let u1 = srv.add(raw("a", "Roadmap", "Does Thursday work?"))
     let u2 = srv.add(raw("b", "Re: Roadmap", "Yes it does", ref: "References: <a@x>\nIn-Reply-To: <a@x>\n"), flags: ["\\Seen"])
@@ -387,7 +387,7 @@ if let key = ProcessInfo.processInfo.environment["GEMINI_API_KEY"], !key.isEmpty
         let intel = Intelligence(ai: ai, prefs: Prefs(suite: "everyday.checks"))
         let now = Date()
         let mails = [
-            EmailMessage(id: "a1", threadId: "t1", fromName: "Dana Whitfield", fromAddress: "dana@example.com", to: "me", subject: "Thursday roadmap sync", snippet: "Does 3pm still work?", body: "Hi Xavi, I've moved the roadmap sync to Thursday at 3. Does that still work for you? Can you or Priya present the Q1 plan?", date: now, labelIds: ["INBOX"], hasAttachments: false),
+            EmailMessage(id: "a1", threadId: "t1", fromName: "Oscar Fox", fromAddress: "oscar@example.com", to: "me", subject: "Thursday roadmap sync", snippet: "Does 3pm still work?", body: "Hi Xavi, I've moved the roadmap sync to Thursday at 3. Does that still work for you? Can you or Priya present the Q1 plan?", date: now, labelIds: ["INBOX"], hasAttachments: false),
             EmailMessage(id: "a2", threadId: "t2", fromName: "Harbour Property", fromAddress: "leasing@example.com", to: "me", subject: "Lease renewal for signature", snippet: "Sign by Friday", body: "Please sign and return the attached lease renewal by this Friday or the current rate will lapse.", date: now, labelIds: ["INBOX"], hasAttachments: true),
             EmailMessage(id: "a3", threadId: "t3", fromName: "Shoe Warehouse", fromAddress: "deals@example.com", to: "me", subject: "50% off everything this weekend!", snippet: "Huge sale", body: "Don't miss our biggest sale of the year. Unsubscribe at the bottom.", date: now, labelIds: ["INBOX"], hasAttachments: false),
             EmailMessage(id: "a4", threadId: "t4", fromName: "Import AI", fromAddress: "jack@example.com", to: "me", subject: "Import AI 412", snippet: "This week", body: "Welcome to Import AI, a newsletter about AI research. This week: open-weights models, robotics and policy.", date: now, labelIds: ["INBOX"], hasAttachments: false),
@@ -399,11 +399,11 @@ if let key = ProcessInfo.processInfo.environment["GEMINI_API_KEY"], !key.isEmpty
             func cat(_ id: String) -> TriageCategory? { tri.first { $0.messageId == id }?.category }
             check("triage returns all 4", tri.count == 4, "\(tri.map { "\($0.messageId):\($0.category.rawValue):\($0.priority)" })")
             check("triage: lease is deadline/action with date", tri.first { $0.messageId == "a2" }.map { $0.deadline != nil || !$0.actionItems.isEmpty } ?? false)
-            check("triage: Dana needs reply", tri.first { $0.messageId == "a1" }?.needsReply ?? false)
+            check("triage: Oscar needs reply", tri.first { $0.messageId == "a1" }?.needsReply ?? false)
             check("triage: promo/newsletter low priority", (tri.first { $0.messageId == "a3" }?.priority ?? 100) < 40 && cat("a4") == .newsletter, "\(cat("a3")?.rawValue ?? "-") \(cat("a4")?.rawValue ?? "-")")
         }
         await step("briefing uses skim tags") {
-            let ctx = "EMAIL NEEDING ATTENTION:\n- [Deadline, priority 90] Harbour Property: Lease renewal — Sign and return by Friday 6 November\n- [Needs reply, priority 85] Dana Whitfield: Thursday roadmap sync — asks if 3pm works\n\nCALENDAR:\n- Thu 5 Nov 15:00: Roadmap sync\n\nWEATHER in Cairns: 30C, partly cloudy.\n\nTOP NEWS:\n- EU votes on AI licensing (Guardian, Reuters)"
+            let ctx = "EMAIL NEEDING ATTENTION:\n- [Deadline, priority 90] Harbour Property: Lease renewal — Sign and return by Friday 6 November\n- [Needs reply, priority 85] Oscar Fox: Thursday roadmap sync — asks if 3pm works\n\nCALENDAR:\n- Thu 5 Nov 15:00: Roadmap sync\n\nWEATHER in Cairns: 30C, partly cloudy.\n\nTOP NEWS:\n- EU votes on AI licensing (Guardian, Reuters)"
             let b = try await intel.briefing(context: ctx, name: "Xavi")
             let tags = SkimMarkup.segments(b).filter { $0.kind != nil }
             check("briefing uses skim tags (1-8, none leaked)", (1...8).contains(tags.count) && !SkimMarkup.strip(b).contains("<<"), "\(tags.count) highlights: \(tags.map { "\($0.kind!.rawValue):\($0.text)" })")
@@ -422,7 +422,7 @@ if let key = ProcessInfo.processInfo.environment["GEMINI_API_KEY"], !key.isEmpty
             check("speech: replay comes from the on-disk cache", again.wav == r.wav && sp.cacheSize() > 0)
         }
         await step("thread summary") { let sum = try await intel.summarizeThread(Array(mails.prefix(1))); check("thread summary", sum.count > 20, sum) }
-        await step("reply draft") { let draft = try await intel.draftReply(thread: [mails[0]], tone: "Friendly", myName: "Xavi"); check("reply draft", draft.lowercased().contains("dana") && draft.count > 30, String(draft.prefix(120))) }
+        await step("reply draft") { let draft = try await intel.draftReply(thread: [mails[0]], tone: "Friendly", myName: "Xavi"); check("reply draft", draft.lowercased().contains("oscar") && draft.count > 30, String(draft.prefix(120))) }
         await step("article summary") {
             let art = Article(id: "x", title: "EU votes on licensing rules for large AI models", link: "https://x.test", source: "Guardian", feedURL: "", summary: "", imageURL: nil, published: now, categories: [.ai], trust: 3, outsideBubble: false)
             let aai = try await intel.summarizeArticle(art, text: "Members of the European Parliament voted on Wednesday to require licences for providers of general-purpose AI models above a compute threshold. Open-weights releases below the threshold are exempt. The rules take effect in 2027.")

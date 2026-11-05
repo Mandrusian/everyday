@@ -93,13 +93,13 @@ const mail=[
  {f:'Morning Brew',s:'Your weekday briefing',m:'Newsletter · 6 stories',chip:['Newsletter','#e3e8ee','#4d6a85'],from:0,to:3,dim:1},
  {f:'Parcel Post',s:'Your order has shipped',m:'Arrives Thursday',chip:['Update','#e8e6df','#6f6a5d'],from:1,to:2,dim:1},
  {f:'Greenfield Property',s:'Lease renewal: sign by Friday',m:'Deadline Fri 5pm',chip:['Deadline','#f3dede','#b4483f'],from:2,to:1,dim:0},
- {f:'Dana Reyes',s:'Thursday roadmap sync',m:'Wants you to confirm the agenda',chip:['Needs reply','#f6e3d9','#c0603c'],from:3,to:0,dim:0},
+ {f:'Oscar Fox',s:'Thursday roadmap sync',m:'Wants you to confirm the agenda',chip:['Needs reply','#f6e3d9','#c0603c'],from:3,to:0,dim:0},
 ];
 const rowsEl=$('rows');mail.forEach(r=>{const d=document.createElement('div');d.className='row';d.innerHTML=`<b>${r.f}</b><span class="chip" style="float:right;margin:0;opacity:0;background:${r.chip[1]};color:${r.chip[2]}">${r.chip[0]}</span><span class="s">${r.s}</span><span class="sub">${r.m}</span>`;rowsEl.appendChild(d);r.el=d;r.c=d.querySelector('.chip');});
 
 /* S3 */
 const greet=$('greet');greet.textContent='Good morning, Alex.';
-const segs=[['Lease renewal is due ','' ],['Friday','d'],['. Sign it before 5pm.',''],'\n',['Dana','p'],[' needs a reply on the ',''],['roadmap sync','u'],['.',''],'\n',['Three Google sign-in alerts arrived overnight.','']];
+const segs=[['Lease renewal is due ','' ],['Friday','d'],['. Sign it before 5pm.',''],'\n',['Oscar','p'],[' needs a reply on the ',''],['roadmap sync','u'],['.',''],'\n',['Three Google sign-in alerts arrived overnight.','']];
 const lines=[[],[],[]];let li=0;segs.forEach(s=>{if(s==='\n'){li++;}else lines[li].push(s);});
 const lineLen=lines.map(l=>l.reduce((a,s)=>a+s[0].length,0));const total=lineLen.reduce((a,b)=>a+b,0);
 const brief=$('brief');brief.innerHTML=[0,1,2].map(i=>`<div class="ln" style="overflow:hidden"></div>`).join('');const lnEls=[...brief.children];
@@ -121,7 +121,7 @@ const tq=$('tq'),caret=$('caret'),trow=$('trow');
 const p5=$('p5');p5.innerHTML='<div class="l a">No account.</div><div class="l b">No servers.</div><div class="l c" style="font-style:italic;color:#e8916f">Your key, your Mac.</div>';
 const p5l=[...p5.children];
 /* S6 */
-const t6=$('t6'),u6=$('u6');u6.textContent='A$1  ·  or build it free';
+const t6=$('t6'),u6=$('u6');u6.textContent='Free  ·  or build it free';
 
 const scs=['s1','s2','s3','s4','s5','s6'].map($);
 const cuts=[0,4,12,20,28,34,40].map(bt);

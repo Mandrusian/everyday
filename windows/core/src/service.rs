@@ -64,7 +64,7 @@ pub fn sync<S: Read + Write>(c: &mut Imap<S>, store: &Store, now: i64) -> Result
 mod tests {
     use super::*;
     use crate::imap::fake::*;
-    fn raw(subject: &str, refs: &str) -> String { format!("From: Dana <dana@acme.com>\r\nTo: me@example.com\r\nSubject: {subject}\r\nMessage-ID: <{subject}@x>\r\n{refs}\r\nBody of {subject}\r\n") }
+    fn raw(subject: &str, refs: &str) -> String { format!("From: Oscar <oscar@acme.com>\r\nTo: me@example.com\r\nSubject: {subject}\r\nMessage-ID: <{subject}@x>\r\n{refs}\r\nBody of {subject}\r\n") }
     fn open(port: u16) -> Imap<std::net::TcpStream> { let mut c = Imap::new(std::net::TcpStream::connect(("127.0.0.1", port)).unwrap()); c.greeting().unwrap(); c.login("me@example.com", "apppassword").unwrap(); c }
     #[test] fn first_sync_then_incremental_then_flags_and_removals() {
         let (port, st) = serve(); let store = Store::open(None).unwrap();

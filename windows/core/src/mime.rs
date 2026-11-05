@@ -82,10 +82,10 @@ pub fn parse_unsubscribe(header: Option<&str>) -> Option<UnsubscribeTarget> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    const RAW: &str = "From: Dana Whitfield <dana@acme.com>\r\nTo: me@example.com\r\nSubject: Files\r\nMessage-ID: <m2@x>\r\nIn-Reply-To: <a@x>\r\nReferences: <a@x> <b@x>\r\nList-Unsubscribe: <mailto:unsub@brew.com?subject=unsubscribe>, <https://brew.com/u?x=1>\r\nContent-Type: multipart/mixed; boundary=\"BB\"\r\n\r\n--BB\r\nContent-Type: text/plain\r\n\r\nSee attached.\r\n--BB\r\nContent-Type: application/pdf; name=\"Lease.pdf\"\r\nContent-Disposition: attachment; filename=\"Lease.pdf\"\r\nContent-Transfer-Encoding: base64\r\n\r\nSGVsbG8gUERG\r\n--BB--\r\n";
+    const RAW: &str = "From: Oscar Fox <oscar@acme.com>\r\nTo: me@example.com\r\nSubject: Files\r\nMessage-ID: <m2@x>\r\nIn-Reply-To: <a@x>\r\nReferences: <a@x> <b@x>\r\nList-Unsubscribe: <mailto:unsub@brew.com?subject=unsubscribe>, <https://brew.com/u?x=1>\r\nContent-Type: multipart/mixed; boundary=\"BB\"\r\n\r\n--BB\r\nContent-Type: text/plain\r\n\r\nSee attached.\r\n--BB\r\nContent-Type: application/pdf; name=\"Lease.pdf\"\r\nContent-Disposition: attachment; filename=\"Lease.pdf\"\r\nContent-Transfer-Encoding: base64\r\n\r\nSGVsbG8gUERG\r\n--BB--\r\n";
     #[test] fn headers_body_and_threading() {
         let p = parse(RAW.as_bytes());
-        assert_eq!((p.subject.as_str(), p.from_name.as_str(), p.from_address.as_str()), ("Files", "Dana Whitfield", "dana@acme.com"));
+        assert_eq!((p.subject.as_str(), p.from_name.as_str(), p.from_address.as_str()), ("Files", "Oscar Fox", "oscar@acme.com"));
         assert!(p.body.contains("See attached.")); assert_eq!(p.thread_key(), "a@x");
     }
     #[test] fn attachments_are_listed_and_decoded_on_demand() {

@@ -1,28 +1,59 @@
 <!doctype html>
-<html lang="en-AU"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Privacy — everyday.</title>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy | everyday.</title>
+<meta name="theme-color" content="#f1ebdd">
+<meta name="color-scheme" content="light dark">
+<script>(function(){var d=document.documentElement,t=null;try{t=localStorage.getItem('theme')}catch(e){}if(t==='light'||t==='dark')d.dataset.theme=t;d.dataset.mode=t||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light')})()</script>
 <link rel="stylesheet" href="css/style.css">
-<style>body{padding:clamp(24px,6vw,96px);max-width:820px;margin:auto}h1{font-size:44px}h2{font-size:26px;margin-top:1.6em}</style></head>
+</head>
 <body>
-<p><a href="index.html">← everyday.</a></p>
-<h1>Privacy</h1>
-<p><em>Draft. Have this checked before launch.</em></p>
-<h2>What everyday. is</h2>
-<p>A Mac app that runs entirely on your computer. There is no everyday. account and no everyday. server. The authors receive no data from the app.</p>
-<h2>Stored on your Mac</h2>
-<p>Your mail, tasks, news, preferences and what the app has learned are in a local database in <code>~/Library/Application Support/everyday</code>. Mail passwords and AI keys are stored in the macOS Keychain. You can delete everything from Settings → Privacy.</p>
-<h2>Sent from your Mac to others</h2>
-<ul>
-<li><strong>Your mail provider</strong>, to read, and (only when you approve) to send, archive or delete mail.</li>
-<li><strong>News publishers</strong>, when the app fetches their feeds and articles.</li>
-<li><strong>Open-Meteo</strong>, your city name and its coordinates, for the weather.</li>
-<li><strong>everyday.mandrusia.tech</strong>, once a day, to read a small public file that says whether a newer version exists. Nothing about you is sent, and you can turn it off in Settings → General.</li>
-<li><strong>The AI provider you choose</strong>, only if you add a key. Settings → AI provider → activity log shows every request and the exact text sent. You can limit this to subject lines and snippets.</li>
-</ul>
-<h2>Not collected</h2>
-<p>No analytics, advertising, tracking or crash reporting is built in.</p>
-<h2>Payments</h2>
-<p>If you buy the download, payment is handled by our payment provider, which receives your payment details and email address. We don’t see your card number.</p>
-<h2>Contact</h2>
-<p>TODO: contact address.</p>
-</body></html>
+<main class="doc">
+  <div class="bg" aria-hidden="true"></div>
+  <div class="wrap">
+    <div class="top">
+      <a class="back" href="index.html" aria-label="everyday. home">everyday<b>.</b></a>
+      <button class="theme" type="button" aria-label="Switch theme"><svg viewBox="0 0 24 24" aria-hidden="true"><mask id="moon"><rect width="24" height="24" fill="#fff"/><circle class="cut" cx="25" cy="3" r="7" fill="#000"/></mask><circle cx="12" cy="12" r="5.5" fill="currentColor" mask="url(#moon)"/><path class="rays" d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+    </div>
+    <h1>Privacy</h1>
+    <p class="note">Draft. Have this checked before launch.</p>
+
+    <h2>What everyday. is</h2>
+    <p>A Mac app that runs entirely on your computer. There is no everyday. account and no everyday. server. The authors receive no data from the app.</p>
+
+    <h2>Stored on your Mac</h2>
+    <p>Your mail, tasks, news, preferences and what the app has learned are in a local database in <code>~/Library/Application Support/everyday</code>. Mail passwords and AI keys are stored in the macOS Keychain. You can delete everything from Settings → Privacy.</p>
+
+    <h2>Sent from your Mac to others</h2>
+    <ul>
+      <li><strong>Your mail provider</strong>, to read, and (only when you approve) to send, archive or delete mail.</li>
+      <li><strong>News publishers</strong>, when the app fetches their feeds and articles.</li>
+      <li><strong>Open-Meteo</strong>, your city name and its coordinates, for the weather.</li>
+      <li><strong>everyday.mandrusia.tech</strong>, once a day, to read a small public file that says whether a newer version exists. Nothing about you is sent, and you can turn it off in Settings → General.</li>
+      <li><strong>The AI provider you choose</strong>, only if you add a key. Settings → AI provider → activity log shows every request and the exact text sent. You can limit this to subject lines and snippets.</li>
+    </ul>
+
+    <h2>Not collected</h2>
+    <p>No analytics, advertising, tracking or crash reporting is built in.</p>
+
+    <h2>Contact</h2>
+    <p>Open an issue at <a href="https://github.com/Mandrusian/everyday/issues">github.com/Mandrusian/everyday/issues</a>.</p>
+  </div>
+</main>
+<script>
+(function () {
+  var d = document.documentElement, q = matchMedia('(prefers-color-scheme: dark)'), b = document.querySelector('.theme');
+  function sync() { d.dataset.mode = d.dataset.theme || (q.matches ? 'dark' : 'light'); b.setAttribute('aria-label', d.dataset.mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'); }
+  b.addEventListener('click', function () {
+    var next = d.dataset.mode === 'dark' ? 'light' : 'dark', sys = q.matches ? 'dark' : 'light';
+    if (next === sys) delete d.dataset.theme; else d.dataset.theme = next;
+    try { next === sys ? localStorage.removeItem('theme') : localStorage.setItem('theme', next); } catch (e) {}
+    sync();
+  });
+  q.addEventListener && q.addEventListener('change', sync); sync();
+})();
+</script>
+</body>
+</html>

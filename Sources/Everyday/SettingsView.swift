@@ -656,7 +656,7 @@ struct AppearancePane: View {
             }
             VStack(alignment: .leading, spacing: 6) {
                 Text("Preview").font(.ui(12, .semibold)).tracking(1.2).foregroundStyle(Palette.text3)
-                SkimBody(text: "<<u|Sign the lease renewal>> by <<d|Friday 6 November>>. <<p|Dana>> is waiting on a reply about the roadmap sync, and <<n|$1,240>> is due to <<p|Studio Kite>> by <<d|12 November>>. Rain clears by noon in <<n|Cairns>>.", size: 17)
+                SkimBody(text: "<<u|Sign the lease renewal>> by <<d|Friday 6 November>>. <<p|Oscar>> is waiting on a reply about the roadmap sync, and <<n|$1,240>> is due to <<p|Studio Kite>> by <<d|12 November>>. Rain clears by noon in <<n|Cairns>>.", size: 17)
                     .padding(16).frame(maxWidth: .infinity, alignment: .leading).background(RoundedRectangle(cornerRadius: 8).fill(Palette.raised))
             }
         }

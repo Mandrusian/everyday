@@ -61,4 +61,4 @@ d = json.load(open(p)); d["version"] = sys.argv[1]
 json.dump(d, open(p, "w"), indent=2); open(p, "a").write("\n")
 PY
 echo "✓ $DMG  (sha256 $SUM)"
-echo "  Upload it to your checkout (Lemon Squeezy / Stripe), then deploy site/ so version.json goes live."
+echo "  Attach it to a GitHub release (gh release create v$VERSION \"$DMG\"), then deploy site/ so version.json goes live."

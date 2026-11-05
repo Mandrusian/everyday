@@ -65,7 +65,7 @@ canvas#gl{position:absolute;inset:0;width:1280px;height:720px;pointer-events:non
   <div class="a pill paper" id="inp" style="left:640px;top:300px;width:660px;height:78px;justify-content:flex-start;padding:0 26px;box-sizing:border-box;font:500 25px var(--sans)"><span id="tq" style="color:var(--ink)"></span><span id="ph" style="color:#a39e92">Add a task…</span><span id="caret" style="width:2px;height:28px;background:#d97757;margin-left:2px"></span></div>
   <div class="a pill accb" id="addb" style="left:905px;top:300px;width:96px;height:52px;font-size:20px">Add</div>
   <div class="a paper" id="t1" style="left:640px;top:420px;width:600px;height:88px;border-radius:20px;box-sizing:border-box;padding:16px 26px;font:600 24px var(--sans)">Pay rent<div style="margin-top:8px"><span class="chip" style="background:#f6e3d9;color:#c0603c" id="t1a">Fri 5pm</span> <span class="chip" style="background:#f3dede;color:#b4483f" id="t1b">High</span></div></div>
-  <div class="a paper" id="t2" style="left:640px;top:530px;width:600px;height:88px;border-radius:20px;box-sizing:border-box;padding:16px 26px;font:600 24px var(--sans)"><span id="t2t">Reply to Dana</span><div style="margin-top:8px"><span class="chip" style="background:#e3e8ee;color:#4d6a85">Suggested from mail</span></div>
+  <div class="a paper" id="t2" style="left:640px;top:530px;width:600px;height:88px;border-radius:20px;box-sizing:border-box;padding:16px 26px;font:600 24px var(--sans)"><span id="t2t">Reply to Oscar</span><div style="margin-top:8px"><span class="chip" style="background:#e3e8ee;color:#4d6a85">Suggested from mail</span></div>
     <div class="a pill" id="ok" style="left:540px;top:44px;width:54px;height:54px;border:3px solid #141413;box-sizing:border-box"><svg id="okv" width="26" height="26" viewBox="0 0 24 24" style="opacity:0"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#141413" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div></div>
 </div>
 
@@ -88,7 +88,7 @@ canvas#gl{position:absolute;inset:0;width:1280px;height:720px;pointer-events:non
 <div class="sc beige" id="s9">
   <svg class="a wob" id="blob2" width="760" height="600" viewBox="0 0 220 190" style="left:640px;top:360px;opacity:.0"><path d="M120,20 C170,10 215,50 205,100 C198,150 150,185 95,172 C40,160 5,115 25,65 C38,35 80,28 120,20Z" fill="#d97757"/></svg>
   <div class="a serif" id="t9" style="left:800px;top:330px;font:450 104px var(--serif);letter-spacing:-.03em;color:var(--ink);white-space:nowrap">everyday<span style="color:#d97757">.</span></div>
-  <div class="a pill accb" id="btn5" style="left:800px;top:470px;width:380px;height:70px;font-size:26px">Get everyday. · A$1</div>
+  <div class="a pill accb" id="btn5" style="left:800px;top:470px;width:380px;height:70px;font-size:26px">Get everyday. Free</div>
   <div class="a" id="u9" style="left:800px;top:545px;font:500 20px var(--sans);color:#6f6a5d">or build it free from source</div>
 </div>
 
@@ -137,14 +137,14 @@ function cpos(t){if(t<=CP[0][0])return CP[0];for(let i=0;i<CP.length-1;i++){cons
 const rowsEl=$('rows');
 const mail=[{f:'Greenfield Property',s:'Lease renewal. Sign by Friday',c:['Deadline','#f3dede','#b4483f'],from:0,to:1,dim:0},
  {f:'Morning Brew',s:'Your weekday briefing',c:['Newsletter','#e3e8ee','#4d6a85'],from:1,to:2,dim:1},
- {f:'Dana Reyes',s:'Thursday roadmap sync',c:['Needs reply','#f6e3d9','#c0603c'],from:2,to:0,dim:0}];
+ {f:'Oscar Fox',s:'Thursday roadmap sync',c:['Needs reply','#f6e3d9','#c0603c'],from:2,to:0,dim:0}];
 mail.forEach(r=>{const d=document.createElement('div');d.className='row';d.innerHTML=`<div>${r.f}<small>${r.s}</small></div><span class="chip" style="opacity:0;background:${r.c[1]};color:${r.c[2]}">${r.c[0]}</span>`;rowsEl.appendChild(d);r.el=d;r.ch=d.querySelector('.chip');});
 /* providers */
 const prov=$('prov');['iCloud','Fastmail','Yahoo'].forEach(n=>{const s=document.createElement('span');s.className='pill paper';s.style.cssText='font:600 19px var(--sans);padding:0 22px;height:44px;opacity:0';s.textContent=n;prov.appendChild(s);});
 const provs=[...prov.children];
 /* briefing */
 $('greet').textContent='Good morning, Alex.';
-const L=[[['Lease renewal is due ',''],['Friday','hl-d'],['. Sign it before 5pm.','']],[['Dana','hl-p'],[' needs a reply on the ',''],['roadmap sync','hl-u'],['.','']],[['Three Google sign-in alerts arrived overnight.','']]];
+const L=[[['Lease renewal is due ',''],['Friday','hl-d'],['. Sign it before 5pm.','']],[['Oscar','hl-p'],[' needs a reply on the ',''],['roadmap sync','hl-u'],['.','']],[['Three Google sign-in alerts arrived overnight.','']]];
 const brief=$('brief');brief.innerHTML='<div style="overflow:hidden"></div><div style="overflow:hidden"></div><div style="overflow:hidden"></div>';const bl=[...brief.children];
 const tot=L.flat().reduce((a,s)=>a+s[0].length,0);
 /* news */

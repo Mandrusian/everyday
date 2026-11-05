@@ -156,7 +156,7 @@ pub mod fake {
 mod tests {
     use super::*;
     use super::fake::*;
-    fn raw(subject: &str) -> String { format!("From: Dana <dana@acme.com>\r\nTo: me@example.com\r\nSubject: {subject}\r\nMessage-ID: <{subject}@x>\r\n\r\nBody of {subject}\r\n") }
+    fn raw(subject: &str) -> String { format!("From: Oscar <oscar@acme.com>\r\nTo: me@example.com\r\nSubject: {subject}\r\nMessage-ID: <{subject}@x>\r\n\r\nBody of {subject}\r\n") }
     fn connect(port: u16) -> Imap<std::net::TcpStream> { let mut c = Imap::new(std::net::TcpStream::connect(("127.0.0.1", port)).unwrap()); c.greeting().unwrap(); c }
     #[test] fn login_select_search_fetch() {
         let (port, st) = serve(); st.lock().unwrap().msgs.push(Msg { uid: 1, flags: vec!["\\Seen".into()], raw: raw("Roadmap") }); st.lock().unwrap().msgs.push(Msg { uid: 2, flags: vec![], raw: raw("Invoice") });

@@ -1,6 +1,6 @@
 # everyday. — release roadmap
 
-Goal: a Mac app other people can buy for A$1 (source on GitHub, binary paid) and set up in under five minutes.
+Goal: a free, open-source Mac app other people can download or build and set up in under five minutes.
 
 ## v1.0 scope (Mac only)
 
@@ -74,9 +74,9 @@ Repository
 - LICENSE (decide: MIT or GPL-3.0), README with 3-command build, CONTRIBUTING, SECURITY, privacy statement, no secrets or personal data in history.
 - `Scripts/release.sh`: universal binary (arm64 + x86_64), bundle, ad-hoc sign, DMG, SHA-256.
 Site (everyday.mandrusia.tech)
-- One page: what it is, screenshots, price, privacy, build-from-source link, Open Anyway instructions with screenshots, privacy policy.
-Payment
-- Lemon Squeezy (owned by Stripe; merchant of record, so it handles GST/VAT) or a Stripe Payment Link if you accept handling tax yourself. A$1 checkout → emailed download link. No licence keys or DRM; source is open.
+- One page: what it is, screenshots, download, privacy, build-from-source link, Open Anyway instructions with screenshots, privacy policy.
+Distribution
+- Free. The signed DMG is attached to GitHub Releases; the site's download button points at the latest release.
 Updates
 - Sparkle appcast on the site; EdDSA signing key kept offline. Works without an Apple account.
 Support
@@ -103,7 +103,7 @@ Also built: in-app update notice (reads site/version.json once a day, opens the 
 
 Release tooling is written and tested: `Scripts/release.sh` (checks, build, dmg, checksum, version bump; signing and notarization switch on when `DEVELOPER_ID` is set) and `Resources/everyday.entitlements`. SMTP send, IMAP archive/trash/draft are verified against scripted local servers.
 
-Still needs the owner (these cannot be done without their accounts, money or ears): the Developer ID certificate and notarization credentials (run the script once they exist), Sparkle-style silent updates (needs signing keys from that account), the Stripe or Lemon Squeezy product and its link in `site/js/config.js`, a spoken VoiceOver listen-through, and Windows (`windows/` has the full port: a Rust core with 96 passing tests and a Tauri app with every screen, including calendar through an iCal link; it has not been run on a Windows machine, see WINDOWS.md).
+Still needs the owner (these cannot be done without their accounts, money or ears): the Developer ID certificate and notarization credentials (run the script once they exist), Sparkle-style silent updates (needs signing keys from that account), a spoken VoiceOver listen-through, and Windows (`windows/` has the full port: a Rust core with 96 passing tests and a Tauri app with every screen, including calendar through an iCal link; it has not been run on a Windows machine, see WINDOWS.md).
 Decided against: a bundled Piper/Kokoro voice. It needs an ONNX runtime and a 20-60 MB model inside a SwiftPM-only build; Apple's on-device Premium voices give the same offline, no-cloud result with no extra dependency.
 
 Verified live on 5 Nov 2026 against a real Gmail account (11,654 messages): IMAP login, sync of 150 messages, quiet incremental sync, and an SMTP message to the owner's own address accepted by the server.

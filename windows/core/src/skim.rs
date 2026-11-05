@@ -31,15 +31,15 @@ pub fn preview(text: &str, limit: usize) -> String {
 mod tests {
     use super::*;
     #[test] fn sentences_naming_handled_senders_are_removed() {
-        let old = "Update your payment details by Friday. Dana is waiting on a reply about Thursday. Google also sent three notices today. It is 30°C.";
+        let old = "Update your payment details by Friday. Oscar is waiting on a reply about Thursday. Google also sent three notices today. It is 30°C.";
         assert_eq!(removing_sentences_mentioning(&["Google", "Google One"], old),
-            "Update your payment details by Friday. Dana is waiting on a reply about Thursday. It is 30°C.");
+            "Update your payment details by Friday. Oscar is waiting on a reply about Thursday. It is 30°C.");
     }
     #[test] fn tags_are_ignored_when_matching() {
-        assert_eq!(removing_sentences_mentioning(&["google"], "<<u|Google One>> payment is due. Dana needs you."), "Dana needs you.");
+        assert_eq!(removing_sentences_mentioning(&["google"], "<<u|Google One>> payment is due. Oscar needs you."), "Oscar needs you.");
     }
     #[test] fn notification_preview_drops_tags_and_ends_on_a_sentence() {
-        let t = "<<u|Pay rent>> by <<d|Friday>>. Dana needs a reply about the Thursday roadmap sync and wants the agenda confirmed before the meeting starts later today at noon.";
+        let t = "<<u|Pay rent>> by <<d|Friday>>. Oscar needs a reply about the Thursday roadmap sync and wants the agenda confirmed before the meeting starts later today at noon.";
         assert_eq!(preview(t, 60), "Pay rent by Friday.");
     }
 }

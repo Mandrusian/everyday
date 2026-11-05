@@ -91,12 +91,12 @@ mod tests {
                 else if up == "DATA" { in_data = true; w.write_all(b"354 go\r\n").unwrap(); } else if up == "QUIT" { w.write_all(b"221 bye\r\n").unwrap(); return; } else { w.write_all(b"250 ok\r\n").unwrap(); } } } });
         (port, log)
     }
-    fn msg() -> Vec<u8> { compose_reply("me@example.com", &ReplyTo { from_name: "Dana", from_address: "dana@acme.com", subject: "Roadmap", message_id: "<a@x>", references: &[] }, "Yes, 3pm works. I will present.", "Thu, 05 Nov 2026 09:00:00 +1000", "u1") }
+    fn msg() -> Vec<u8> { compose_reply("me@example.com", &ReplyTo { from_name: "Oscar", from_address: "oscar@acme.com", subject: "Roadmap", message_id: "<a@x>", references: &[] }, "Yes, 3pm works. I will present.", "Thu, 05 Nov 2026 09:00:00 +1000", "u1") }
     #[test] fn sends_a_reply_with_auth_envelope_and_threading() {
         let (port, log) = fake(true, "apppassword");
-        send(std::net::TcpStream::connect(("127.0.0.1", port)).unwrap(), "me@example.com", "apppassword", "me@example.com", &["dana@acme.com".into()], &msg()).unwrap();
+        send(std::net::TcpStream::connect(("127.0.0.1", port)).unwrap(), "me@example.com", "apppassword", "me@example.com", &["oscar@acme.com".into()], &msg()).unwrap();
         let l = log.lock().unwrap().join("\n");
-        assert!(l.contains("MAIL FROM:<me@example.com>") && l.contains("RCPT TO:<dana@acme.com>") && l.contains("Subject: Re: Roadmap") && l.contains("In-Reply-To: <a@x>"));
+        assert!(l.contains("MAIL FROM:<me@example.com>") && l.contains("RCPT TO:<oscar@acme.com>") && l.contains("Subject: Re: Roadmap") && l.contains("In-Reply-To: <a@x>"));
         assert!(!l.contains("apppassword"));   // AUTH PLAIN is base64, the password never appears in clear
         assert!(l.contains(&B64.encode("Yes, 3pm works. I will present.")[..20]));
     }
@@ -111,5 +111,5 @@ mod tests {
         assert!(log.lock().unwrap().contains(&"..hidden dot".to_string()));
         assert!(send(std::io::Cursor::new(vec![]), "u", "", "a@b.c", &[], b"x").is_err());
     }
-    #[test] fn bare_addresses() { assert_eq!(bare_address("Dana W <dana@acme.com>"), "dana@acme.com"); assert_eq!(bare_address(" x@y.z "), "x@y.z"); }
+    #[test] fn bare_addresses() { assert_eq!(bare_address("Oscar F <oscar@acme.com>"), "oscar@acme.com"); assert_eq!(bare_address(" x@y.z "), "x@y.z"); }
 }

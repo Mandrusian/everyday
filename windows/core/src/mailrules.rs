@@ -83,7 +83,7 @@ mod tests {
     fn e(id: &str, thread: &str, name: &str, addr: &str, subj: &str) -> Email { Email { id: id.into(), thread_id: thread.into(), from_name: name.into(), from_address: addr.into(), subject: subj.into(), date: 100 } }
     fn tri(id: &str, cat: Category, pr: u8) -> (String, Triage) { (id.into(), Triage { message_id: id.into(), category: cat, priority: pr, summary: "s".into(), deadline: None, needs_reply: false }) }
     fn data() -> (Vec<Email>, HashMap<String, Triage>) {
-        let emails = vec![e("1", "t1", "Dana", "dana@acme.com", "Roadmap"), e("2", "t2", "Brew", "hi@brew.com", "Weekday briefing")];
+        let emails = vec![e("1", "t1", "Oscar", "oscar@acme.com", "Roadmap"), e("2", "t2", "Brew", "hi@brew.com", "Weekday briefing")];
         (emails, [tri("1", Category::Newsletter, 20), tri("2", Category::Newsletter, 20)].into_iter().collect())
     }
     #[test] fn snoozed_leave_the_inbox_and_come_back_needing_attention() {
@@ -100,13 +100,13 @@ mod tests {
         l.vips.clear(); assert_eq!(rows(&emails, &t, &l, 0).iter().find(|r| r.message.thread_id == "t2").unwrap().triage.as_ref().unwrap().priority, 20);
     }
     #[test] fn handled_threads_stop_being_attention_and_their_sender_is_banned_from_the_briefing() {
-        let emails = vec![e("g1", "gt1", "Google", "no-reply@accounts.google.com", "App password created"), e("d1", "dt1", "Dana Whitfield", "dana@acme.com.au", "Roadmap sync")];
+        let emails = vec![e("g1", "gt1", "Google", "no-reply@accounts.google.com", "App password created"), e("d1", "dt1", "Oscar Fox", "oscar@acme.com.au", "Roadmap sync")];
         let t: HashMap<String, Triage> = [tri("g1", Category::Important, 90), tri("d1", Category::Important, 90)].into_iter().collect();
         let mut l = Local::default();
         assert_eq!(rows(&emails, &t, &l, 0).iter().filter(|r| is_attention(r)).count(), 2);
         l.handled.insert("gt1".into());
         let rs = rows(&emails, &t, &l, 0);
-        assert_eq!(rs.iter().filter(|r| is_attention(r)).map(|r| r.message.from_name.as_str()).collect::<Vec<_>>(), ["Dana Whitfield"]);
+        assert_eq!(rs.iter().filter(|r| is_attention(r)).map(|r| r.message.from_name.as_str()).collect::<Vec<_>>(), ["Oscar Fox"]);
         assert_eq!(banned_names(&rs, &l), ["Google"]);
     }
     #[test] fn rules_match_sender_and_subject() {

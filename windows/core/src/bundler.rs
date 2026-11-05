@@ -42,16 +42,16 @@ mod tests {
     #[test] fn domain_keys() {
         assert_eq!(domain_key("no-reply@accounts.google.com"), "google.com");
         assert_eq!(domain_key("a@mail.example.com.au"), "example.com.au");
-        assert_eq!(domain_key("dana@acme.com"), "acme.com");
+        assert_eq!(domain_key("oscar@acme.com"), "acme.com");
     }
     #[test] fn automated_senders_are_detected_people_are_not() {
         assert!(is_automated("no-reply@accounts.google.com", None)); assert!(is_automated("noreply@google.com", None));
-        assert!(!is_automated("dana@acme.com.au", None)); assert!(is_automated("dana@acme.com", Some(Category::Newsletter)));
+        assert!(!is_automated("oscar@acme.com.au", None)); assert!(is_automated("oscar@acme.com", Some(Category::Newsletter)));
     }
     #[test] fn that_was_me_covers_the_whole_google_group_but_not_people() {
         let row = |t: &str, a: &str| Row { thread_id: t.into(), from_address: a.into(), category: Some(Category::Important) };
         let rows = vec![row("gt1", "no-reply@accounts.google.com"), row("gt2", "no-reply@accounts.google.com"), row("gt3", "noreply@google.com"),
-                        row("gt4", "no-reply@accounts.google.com"), row("dt1", "dana@acme.com.au")];
+                        row("gt4", "no-reply@accounts.google.com"), row("dt1", "oscar@acme.com.au")];
         assert_eq!(expanded_thread_ids(&["gt1".into()], &rows), ["gt1", "gt2", "gt3", "gt4"]);
         assert_eq!(expanded_thread_ids(&["dt1".into()], &rows), ["dt1"]);
     }

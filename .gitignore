@@ -7,3 +7,4 @@ promo/**/*.mp4
 promo/**/frames/
 roast_video/
 *.dmg
+.playwright-mcp/
