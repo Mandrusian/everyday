@@ -1,6 +1,10 @@
 package app.everyday.android
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -33,11 +37,17 @@ enum class Tab(val title: String, val icon: ImageVector, val selectedIcon: Image
 }
 
 class MainActivity : ComponentActivity() {
+    // Android 13+ needs a runtime yes before the morning briefing can notify.
+    private val askNotify = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         Core.open(applicationContext)
         Morning.schedule(applicationContext)
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) askNotify.launch(Manifest.permission.POST_NOTIFICATIONS)
         setContent { EverydayTheme { Root() } }
     }
 }

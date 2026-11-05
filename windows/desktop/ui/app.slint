@@ -419,7 +419,7 @@ component TopicPicker inherits VerticalLayout {
     }
 }
 
-// The swipe deck: Less, More or Love. Cards tilt and fade away; keys ← → ↑ work too.
+// The swipe deck: Less, More or Love. Cards fly off left, right or up; drag them, or use keys ← → ↑.
 component Deck inherits VerticalLayout {
     in property <[Story]> deck;
     in property <string> done-text: "Your choices tune Top stories.";
@@ -428,29 +428,53 @@ component Deck inherits VerticalLayout {
     if root.deck.length == 0: Empty { title: "You're through the deck"; body: root.done-text; }
     if root.deck.length > 0: HorizontalLayout {
         alignment: center;
-        card := Card {
-            property <float> fling;
-            property <int> pending;
+        Rectangle {
             width: 540px; height: 360px;
-            transform-rotation: fling * 14deg;
-            opacity: 1 - abs(fling);
-            animate fling { duration: 220ms; easing: ease-in; }
-            Timer { interval: 230ms; running: card.fling != 0; triggered => { root.react(card.pending); card.fling = 0; } }
-            VerticalLayout {
-                padding: 30px; spacing: 12px;
-                Label { text: root.deck[0].source; }
-                Para { text: root.deck[0].title; glyph: 0.47; font-family: Ink.serif; font-size: 26px; color: Ink.text; }
-                Text { text: root.deck[0].summary; color: Ink.text2; font-size: 14.5px; wrap: word-wrap; vertical-stretch: 1; overflow: elide; }
-                HorizontalLayout {
-                    spacing: 10px; alignment: center;
-                    Button { text: "Less like this"; clicked => { card.pending = -1; card.fling = -1; } }
-                    Button { text: "More like this"; clicked => { card.pending = 1; card.fling = 1; } }
-                    Button { text: "Love it"; primary: true; clicked => { card.pending = 2; card.fling = 0.01; } }
+            // Next card waits underneath, slightly smaller.
+            if root.deck.length > 1: Card { width: parent.width; height: parent.height; transform-scale: 0.95 + 0.05 * min(1, abs(card.fling) + abs(card.lift) + abs(card.drag) / 300px); opacity: 0.6; }
+            card := Card {
+                property <float> fling;
+                property <float> lift;
+                property <length> drag;
+                property <int> pending;
+                width: parent.width; height: parent.height;
+                x: fling * 620px + drag;
+                y: -lift * 520px;
+                transform-rotation: fling * 18deg + drag / 30px * 1deg;
+                opacity: 1 - max(abs(fling), abs(lift)) * 0.9;
+                animate fling, lift { duration: 260ms; easing: cubic-bezier(0.4, 0, 0.9, 0.6); }
+                animate drag { duration: 180ms; easing: ease-out; }
+                Timer { interval: 270ms; running: card.fling != 0 || card.lift != 0; triggered => { root.react(card.pending); card.fling = 0; card.lift = 0; card.drag = 0; } }
+                // Drag the card itself: past 140px it flies off that way.
+                swipe := TouchArea {
+                    moved => { if self.pressed { card.drag = self.mouse-x - self.pressed-x; } }
+                    pointer-event(e) => {
+                        if e.kind == PointerEventKind.up {
+                            if card.drag > 140px { card.pending = 1; card.fling = 1; }
+                            else if card.drag < -140px { card.pending = -1; card.fling = -1; }
+                            else { card.drag = 0; }
+                        }
+                    }
+                }
+                VerticalLayout {
+                    padding: 30px; spacing: 12px;
+                    HorizontalLayout {
+                        Label { text: root.deck[0].source; horizontal-stretch: 1; }
+                        Text { text: card.drag > 40px ? "More" : card.drag < -40px ? "Less" : ""; color: Ink.clay; font-size: 13px; font-weight: 600; opacity: min(1, abs(card.drag) / 140px); }
+                    }
+                    Para { text: root.deck[0].title; glyph: 0.47; font-family: Ink.serif; font-size: 26px; color: Ink.text; }
+                    Text { text: root.deck[0].summary; color: Ink.text2; font-size: 14.5px; wrap: word-wrap; vertical-stretch: 1; overflow: elide; }
+                    HorizontalLayout {
+                        spacing: 10px; alignment: center;
+                        Button { text: "Less like this"; clicked => { card.pending = -1; card.fling = -1; } }
+                        Button { text: "More like this"; clicked => { card.pending = 1; card.fling = 1; } }
+                        Button { text: "Love it"; primary: true; clicked => { card.pending = 2; card.lift = 1; } }
+                    }
                 }
             }
         }
     }
-    if root.deck.length > 0: Text { text: root.deck.length + " left. Keys: ← less, → more, ↑ love"; color: Ink.text3; font-size: 12.5px; horizontal-alignment: center; }
+    if root.deck.length > 0: Text { text: root.deck.length + " left. Drag the card, or keys: ← less, → more, ↑ love"; color: Ink.text3; font-size: 12.5px; horizontal-alignment: center; }
 }
 
 component NewsPage inherits VerticalLayout {
