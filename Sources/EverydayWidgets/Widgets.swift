@@ -340,7 +340,7 @@ struct TasksWidget: Widget {
 }
 
 @main
-struct EverydayWidgets: WidgetBundle {
+struct EverydayWidgetBundle: WidgetBundle {
     var body: some Widget {
         ClockWidget(); WeatherWidget(); CalendarWidget(); BriefWidget(); QuoteWidget(); NeedsYouWidget(); NewsWidget(); TasksWidget()
     }

@@ -4,6 +4,7 @@
 <dict>
   <!-- Widgets must be sandboxed. They only read the snapshot the app writes; nothing else. -->
   <key>com.apple.security.app-sandbox</key><true/>
+  <key>com.apple.security.get-task-allow</key><true/>
   <key>com.apple.security.temporary-exception.files.home-relative-path.read-only</key>
   <array>
     <string>/Library/Application Support/everyday/widgets/</string>
