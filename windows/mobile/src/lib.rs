@@ -158,6 +158,8 @@ pub fn run(cmd: &str, args: &Value, secrets: &dyn SecretStore) -> Result<Value, 
         "react" => { let st = st()?; let mut p = profile(&st); p.record(&[], &s(args, "source"), &s(args, "title"), args["reaction"].as_f64().unwrap_or(1.0), now_ts()); let _ = st.put("profile", "interest", 0.0, &p); let _ = st.put("reacted", &s(args, "url"), 0.0, &s(args, "url")); json!(null) }
         "seedInterests" => { let st = st()?; let mut p = profile(&st); let c: Vec<String> = args["categories"].as_array().map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect()).unwrap_or_default(); p.seed(&c.iter().map(String::as_str).collect::<Vec<_>>()); let _ = st.put("profile", "interest", 0.0, &p); json!(null) }
 
+        "topInterests" => json!(profile(&*st()?).top_interests(8).into_iter().filter(|(_, w)| *w > 0.0).map(|(n, _)| n).collect::<Vec<_>>()),
+        "resetInterests" => { let st = st()?; let _ = st.delete("profile", "interest"); let _ = st.delete_all("reacted"); json!(null) }
         "tasks" => json!(tasks::open(&*st()?)),
         "addTask" => json!(tasks::add_quick(&*st()?, &s(args, "input"), &Local::now())),
         "toggleTask" => { tasks::toggle(&*st()?, &s(args, "id"), &Local::now()); json!(null) }

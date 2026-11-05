@@ -9,6 +9,11 @@ data class Row(val threadId: String, val from: String, val fromAddress: String, 
 data class Story(val title: String, val source: String, val url: String, val summary: String, val also: Int)
 data class TaskItem(val id: String, val title: String, val due: Long?)
 data class Reply(val label: String, val kind: String, val threadIds: List<String>, val text: String)
+/** The same topics as the Mac app (NewsCategory). */
+val TOPICS = listOf("world" to "World", "politics" to "Politics", "australia" to "Australia", "business" to "Business", "economy" to "Economy", "technology" to "Technology", "ai" to "AI",
+    "science" to "Science", "space" to "Space", "health" to "Health", "climate" to "Climate", "sport" to "Sport", "gaming" to "Gaming", "aviation" to "Aviation", "entertainment" to "Entertainment",
+    "film" to "Film and TV", "music" to "Music", "books" to "Books", "design" to "Design", "food" to "Food", "travel" to "Travel")
+
 data class Event(val title: String, val whenText: String, val location: String)
 
 /** Everything the screens show. One instance for the app; each load calls the Rust core off the main thread. */
@@ -32,6 +37,18 @@ class AppModel(private val scope: CoroutineScope) {
     /** Threads acted on this session: hidden at once, before the core confirms. */
     var gone by mutableStateOf(setOf<String>())
 
+    var topics by mutableStateOf(setOf<String>())
+    var learned by mutableStateOf(listOf<String>())
+
+    fun toggleTopic(id: String) = scope.launch {
+        val adding = id !in topics
+        topics = if (adding) topics + id else topics - id
+        Core.run("setPref", json("key" to "categories", "value" to topics.joinToString(",")))
+        if (adding && onboarded) Core.run("seedInterests", json("categories" to org.json.JSONArray(listOf(id))))
+    }
+    fun saveTopics() = scope.launch { Core.run("seedInterests", json("categories" to org.json.JSONArray(topics.toList()))); loadLocal() }
+    fun resetInterests() = scope.launch { Core.run("resetInterests"); Core.run("seedInterests", json("categories" to org.json.JSONArray(topics.toList()))); loadLocal(); toast("Started over from your topics") }
+
     fun toast(m: String) { message = m }
 
     fun start() = scope.launch {
@@ -39,6 +56,7 @@ class AppModel(private val scope: CoroutineScope) {
         email = s.optString("email").takeIf { s.has("email") && !s.isNull("email") }
         hasAiKey = s.optBoolean("hasAiKey"); name = s.optString("name")
         onboarded = (Core.run("getPref", json("key" to "onboarded")) as? String) == "1"
+        topics = ((Core.run("getPref", json("key" to "categories")) as? String) ?: "").split(",").filter { it.isNotBlank() }.toSet()
         (Core.run("lastBriefing") as? JSONObject)?.let { briefing = it.optString("text").ifEmpty { null } }
         loadLocal(); ready = true
         refresh()
@@ -48,6 +66,7 @@ class AppModel(private val scope: CoroutineScope) {
         rows = Core.list("inbox").map { Row(it.getString("threadId"), it.optString("from"), it.optString("fromAddress"), it.optString("subject"), it.optString("snippet"), it.optString("summary"), it.optBoolean("attention"), it.optString("category"), it.optInt("count", 1), it.optLong("date"), it.optBoolean("security")) }
         stories = Core.list("stories").map(::story)
         deck = Core.list("swipeDeck").map(::story)
+        learned = (Core.run("topInterests") as? org.json.JSONArray)?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: emptyList()
         tasks = Core.list("tasks").map { TaskItem(it.getString("id"), it.getString("title"), if (it.isNull("due")) null else it.optLong("due")) }
     }
 
@@ -92,7 +111,11 @@ class AppModel(private val scope: CoroutineScope) {
     fun toggleTask(id: String) = scope.launch { Core.run("toggleTask", json("id" to id)); loadLocal() }
     fun deleteTask(id: String) = scope.launch { Core.run("deleteTask", json("id" to id)); loadLocal() }
 
-    fun react(s: Story, reaction: Double) = scope.launch { deck = deck.filter { it.url != s.url }; Core.run("react", json("url" to s.url, "title" to s.title, "source" to s.source, "reaction" to reaction)) }
+    fun react(s: Story, reaction: Double) = scope.launch {
+        deck = deck.filter { it.url != s.url }
+        Core.run("react", json("url" to s.url, "title" to s.title, "source" to s.source, "reaction" to reaction))
+        learned = (Core.run("topInterests") as? org.json.JSONArray)?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: learned
+    }
 
     fun setPref(key: String, value: String) = scope.launch { Core.run("setPref", json("key" to key, "value" to value)) }
 }

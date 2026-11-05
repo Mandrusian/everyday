@@ -3,12 +3,14 @@ import { ScrollView, Palette, Switch } from "std-widgets.slint";
 import "fonts/SourceSerif4.ttf";
 
 export struct MailRow { thread-id: string, from: string, subject: string, summary: string, time: string, attention: bool, security: bool, count: int }
-export struct Msg { from: string, time: string, body: string, attachments: string }
+export struct Msg { from: string, time: string, body: string, attachments: string, breaks: int }
 export struct Story { title: string, source: string, summary: string, url: string }
 export struct TaskItem { id: string, title: string, due: string, overdue: bool }
-export struct Section { heading: string, body: string }
+export struct Section { heading: string, body: string, breaks: int }
 export struct Turn { mine: bool, text: string, sources: string }
 export struct EventRow { title: string, when: string }
+export struct Topic { id: string, name: string, on: bool, index: int }
+export struct TopicRow { items: [Topic] }
 export struct ReplyChip { label: string, handled: bool, index: int }
 
 export global Ink {
@@ -34,7 +36,9 @@ component Appear inherits Rectangle {
     init => { self.t = 1; }
     animate t { duration: 320ms; delay: root.delay; easing: cubic-bezier(0.2, 0.8, 0.2, 1); }
     opacity: t;
-    VerticalLayout { y: (1 - root.t) * root.rise; @children }
+    min-height: inner.min-height; preferred-height: inner.preferred-height; max-height: inner.max-height;
+    min-width: inner.min-width; preferred-width: inner.preferred-width;
+    inner := VerticalLayout { y: (1 - root.t) * root.rise; width: parent.width; height: parent.height; @children }
 }
 
 // A whole page: fills its parent, same fade and rise.
@@ -44,6 +48,15 @@ component PageIn inherits Rectangle {
     animate t { duration: 260ms; easing: cubic-bezier(0.2, 0.8, 0.2, 1); }
     opacity: t;
     Rectangle { y: (1 - root.t) * 12px; width: parent.width; height: parent.height; @children }
+}
+
+// Wrapped text that reserves enough height for its lines. Slint measures wrapped text at its unwrapped width,
+// so the height is estimated from the character count, the width and any line breaks.
+component Para inherits Text {
+    in property <int> breaks;
+    in property <float> glyph: 0.5;
+    wrap: word-wrap;
+    min-height: (ceil(self.text.character-count * self.font-size * self.glyph / max(1px, self.width - 8px)) + self.breaks) * self.font-size * 1.42;
 }
 
 component Label inherits Text { color: Ink.clay; font-size: 12.5px; font-weight: 600; }
@@ -123,21 +136,24 @@ component Wordmark inherits HorizontalLayout {
 
 component NavItem inherits Rectangle {
     in property <string> text;
+    in property <image> icon;
     in property <bool> on;
+    in property <bool> collapsed;
     in property <int> badge;
     callback clicked;
-    height: 36px; border-radius: 8px;
+    height: 38px; border-radius: 8px;
     background: on ? Ink.paper : touch.has-hover ? Ink.paper.with-alpha(0.6) : transparent;
     animate background { duration: 100ms; }
     HorizontalLayout {
-        padding-left: 12px; padding-right: 10px; spacing: 8px;
-        Rectangle { width: 3px; }
-        Text { text: root.text; vertical-alignment: center; color: root.on ? Ink.text : Ink.text2; font-size: 14.5px; font-weight: root.on ? 600 : 500; horizontal-stretch: 1; }
-        if root.badge > 0: Rectangle {
-            width: max(20px, b.preferred-width + 12px); height: 20px; y: 8px; border-radius: 10px; background: Ink.clay;
+        padding-left: 12px; padding-right: 8px; spacing: 11px;
+        Image { source: root.icon; width: 19px; height: 19px; y: (parent.height - 19px) / 2; colorize: root.on ? Ink.clay : Ink.text2; }
+        if !root.collapsed: Text { text: root.text; vertical-alignment: center; color: root.on ? Ink.text : Ink.text2; font-size: 14.5px; font-weight: root.on ? 600 : 500; horizontal-stretch: 1; }
+        if root.badge > 0 && !root.collapsed: Rectangle {
+            width: max(20px, b.preferred-width + 12px); height: 20px; y: 9px; border-radius: 10px; background: Ink.clay;
             b := Text { text: root.badge; color: Ink.paper; font-size: 11.5px; font-weight: 600; }
         }
     }
+    if root.badge > 0 && root.collapsed: Rectangle { x: 26px; y: 7px; width: 8px; height: 8px; border-radius: 4px; background: Ink.clay; }
     touch := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
 }
 
@@ -146,7 +162,7 @@ component Empty inherits VerticalLayout {
     in property <string> body;
     alignment: center; spacing: 6px; padding: 40px;
     Text { text: root.title; font-family: Ink.serif; font-size: 22px; color: Ink.text; horizontal-alignment: center; }
-    Text { text: root.body; color: Ink.text2; font-size: 14.5px; horizontal-alignment: center; wrap: word-wrap; }
+    Para { text: root.body; color: Ink.text2; font-size: 14.5px; horizontal-alignment: center;  }
 }
 
 component PageTitle inherits VerticalLayout {
@@ -154,7 +170,7 @@ component PageTitle inherits VerticalLayout {
     in property <string> sub;
     spacing: 2px;
     Text { text: root.title; font-family: Ink.serif; font-size: 32px; color: Ink.text; }
-    if root.sub != "": Text { text: root.sub; color: Ink.text2; font-size: 14px; wrap: word-wrap; }
+    if root.sub != "": Para { text: root.sub; color: Ink.text2; font-size: 14px;  }
 }
 
 component MailRowView inherits Rectangle {
@@ -199,7 +215,7 @@ component BriefingText inherits VerticalLayout {
     for s[i] in root.sections: Appear { delay: i * 90ms; VerticalLayout {
         padding-top: i == 0 ? 0 : 10px; spacing: 4px;
         if s.heading != "": Text { text: s.heading; color: Ink.text2; font-size: 12.5px; font-weight: 600; }
-        Text { text: s.body; font-family: Ink.serif; font-size: 17px; color: Ink.text; wrap: word-wrap; }
+        Para { text: s.body; breaks: s.breaks; glyph: 0.47; font-family: Ink.serif; font-size: 17px; color: Ink.text; }
     } }
 }
 
@@ -227,7 +243,7 @@ component TodayPage inherits ScrollView {
         HorizontalLayout {
             spacing: 28px; alignment: stretch;
             VerticalLayout {
-                horizontal-stretch: 3; spacing: 12px; alignment: start;
+                horizontal-stretch: 1; min-width: 320px; spacing: 12px; alignment: start;
                 Card {
                     VerticalLayout {
                         padding: 22px; spacing: 12px;
@@ -241,10 +257,10 @@ component TodayPage inherits ScrollView {
                             Text { text: "Writing…"; color: Ink.text3; font-size: 13px; }
                         }
                         if !root.writing && root.briefing.length > 0: BriefingText { sections: root.briefing; }
-                        if !root.writing && root.briefing.length == 0 && !root.has-key: Text { text: "Add a Gemini key in Settings and everyday. will write you a short briefing each morning from your mail, calendar and the news."; color: Ink.text2; font-size: 15px; wrap: word-wrap; }
+                        if !root.writing && root.briefing.length == 0 && !root.has-key: Para { text: "Add a Gemini key in Settings and everyday. will write you a short briefing each morning from your mail, calendar and the news."; color: Ink.text2; font-size: 15px;  }
                         if !root.writing && root.briefing.length == 0 && root.has-key: VerticalLayout {
                             spacing: 14px;
-                            Text { text: "A few sentences on what needs you today, written from your mail, calendar and the news."; color: Ink.text2; font-size: 15px; wrap: word-wrap; }
+                            Para { text: "A few sentences on what needs you today, written from your mail, calendar and the news."; color: Ink.text2; font-size: 15px;  }
                             HorizontalLayout { alignment: start; Button { text: "Write my briefing"; primary: true; clicked => { root.write-briefing(); } } }
                         }
                         if !root.writing && root.briefing.length > 0: HorizontalLayout {
@@ -264,13 +280,13 @@ component TodayPage inherits ScrollView {
                 }
             }
             VerticalLayout {
-                horizontal-stretch: 2; spacing: 8px; alignment: start;
+                width: 250px; spacing: 8px; alignment: start;
                 Label { text: "Up next"; }
-                if root.events.length == 0: Text { text: "Add a calendar link in Settings to see your day here."; color: Ink.text3; font-size: 13.5px; wrap: word-wrap; }
+                if root.events.length == 0: Para { text: "Add a calendar link in Settings to see your day here."; color: Ink.text3; font-size: 13.5px;  }
                 for e in root.events: HorizontalLayout {
                     spacing: 12px; padding-top: 4px; padding-bottom: 4px;
                     Rectangle { width: 3px; border-radius: 2px; background: Ink.clay; }
-                    VerticalLayout { Text { text: e.title; color: Ink.text; font-size: 14.5px; font-weight: 500; wrap: word-wrap; } Text { text: e.when; color: Ink.text2; font-size: 12.5px; } }
+                    VerticalLayout { Para { text: e.title; color: Ink.text; font-size: 14.5px; font-weight: 500;  } Text { text: e.when; color: Ink.text2; font-size: 12.5px; } }
                 }
                 Rectangle { height: 18px; }
                 Label { text: "Tasks"; }
@@ -278,7 +294,7 @@ component TodayPage inherits ScrollView {
                 for t in root.tasks: HorizontalLayout {
                     spacing: 12px; padding-top: 5px; padding-bottom: 5px;
                     Check { y: 1px; clicked => { root.toggle-task(t.id); } }
-                    VerticalLayout { Text { text: t.title; color: Ink.text; font-size: 14.5px; wrap: word-wrap; } if t.due != "": Text { text: t.due; color: t.overdue ? Ink.clay : Ink.text3; font-size: 12px; } }
+                    VerticalLayout { Para { text: t.title; color: Ink.text; font-size: 14.5px;  } if t.due != "": Text { text: t.due; color: t.overdue ? Ink.clay : Ink.text3; font-size: 12px; } }
                 }
                 Rectangle { height: 18px; }
                 if root.stories.length > 0: Label { text: "Top story"; }
@@ -314,24 +330,24 @@ component ThreadPane inherits Rectangle {
             vertical-stretch: 1;
             VerticalLayout {
                 padding: 28px; spacing: 14px; alignment: start;
-                Text { text: root.subject; font-family: Ink.serif; font-size: 25px; color: Ink.text; wrap: word-wrap; }
+                Para { text: root.subject; font-family: Ink.serif; font-size: 25px; color: Ink.text;  }
                 if root.summary != "": Rectangle {
                     background: Ink.raised; border-radius: 10px;
-                    VerticalLayout { padding: 12px; Text { text: root.summary; color: Ink.text2; font-size: 13.5px; wrap: word-wrap; } }
+                    VerticalLayout { padding: 12px; Para { text: root.summary; color: Ink.text2; font-size: 13.5px;  } }
                 }
                 // Account-security notices get "That was me" up front; ordinary mail has it in the toolbar.
                 if root.security: Card {
                     VerticalLayout {
                         padding: 16px; spacing: 8px;
                         Text { text: "Was this you?"; color: Ink.text; font-size: 15px; font-weight: 600; }
-                        Text { text: "If you just signed in or changed a setting, mark it handled. If not, check your account now."; color: Ink.text2; font-size: 13.5px; wrap: word-wrap; }
+                        Para { text: "If you just signed in or changed a setting, mark it handled. If not, check your account now."; color: Ink.text2; font-size: 13.5px;  }
                         HorizontalLayout { alignment: start; Button { text: "That was me"; primary: true; clicked => { root.handled(); } } }
                     }
                 }
                 for m in root.messages: VerticalLayout {
                     spacing: 8px; padding-top: 8px;
                     HorizontalLayout { Text { text: m.from; color: Ink.text; font-size: 14.5px; font-weight: 600; horizontal-stretch: 1; } Text { text: m.time; color: Ink.text3; font-size: 12.5px; } }
-                    Text { text: m.body; font-family: Ink.serif; font-size: 16px; color: Ink.text; wrap: word-wrap; }
+                    Para { text: m.body; breaks: m.breaks; glyph: 0.47; font-family: Ink.serif; font-size: 16px; color: Ink.text; }
                     if m.attachments != "": Text { text: "Attached: " + m.attachments; color: Ink.text3; font-size: 12.5px; }
                     Hairline {}
                 }
@@ -392,6 +408,51 @@ component InboxPage inherits HorizontalLayout {
     }
 }
 
+component TopicPicker inherits VerticalLayout {
+    in property <[TopicRow]> topics;
+    callback toggle(int);
+    spacing: 8px;
+    // Rows come pre-split from Rust; Slint has no flowing wrap layout.
+    for r in root.topics: HorizontalLayout {
+        spacing: 8px; alignment: start;
+        for t in r.items: Appear { delay: t.index * 18ms; rise: 6px; Chip { text: t.name; on: t.on; clicked => { root.toggle(t.index); } } }
+    }
+}
+
+// The swipe deck: Less, More or Love. Cards tilt and fade away; keys ← → ↑ work too.
+component Deck inherits VerticalLayout {
+    in property <[Story]> deck;
+    in property <string> done-text: "Your choices tune Top stories.";
+    callback react(int);
+    alignment: center; spacing: 12px;
+    if root.deck.length == 0: Empty { title: "You're through the deck"; body: root.done-text; }
+    if root.deck.length > 0: HorizontalLayout {
+        alignment: center;
+        card := Card {
+            property <float> fling;
+            property <int> pending;
+            width: 540px; height: 360px;
+            transform-rotation: fling * 14deg;
+            opacity: 1 - abs(fling);
+            animate fling { duration: 220ms; easing: ease-in; }
+            Timer { interval: 230ms; running: card.fling != 0; triggered => { root.react(card.pending); card.fling = 0; } }
+            VerticalLayout {
+                padding: 30px; spacing: 12px;
+                Label { text: root.deck[0].source; }
+                Para { text: root.deck[0].title; glyph: 0.47; font-family: Ink.serif; font-size: 26px; color: Ink.text; }
+                Text { text: root.deck[0].summary; color: Ink.text2; font-size: 14.5px; wrap: word-wrap; vertical-stretch: 1; overflow: elide; }
+                HorizontalLayout {
+                    spacing: 10px; alignment: center;
+                    Button { text: "Less like this"; clicked => { card.pending = -1; card.fling = -1; } }
+                    Button { text: "More like this"; clicked => { card.pending = 1; card.fling = 1; } }
+                    Button { text: "Love it"; primary: true; clicked => { card.pending = 2; card.fling = 0.01; } }
+                }
+            }
+        }
+    }
+    if root.deck.length > 0: Text { text: root.deck.length + " left. Keys: ← less, → more, ↑ love"; color: Ink.text3; font-size: 12.5px; horizontal-alignment: center; }
+}
+
 component NewsPage inherits VerticalLayout {
     in property <[Story]> stories;
     in property <[Story]> deck;
@@ -411,8 +472,8 @@ component NewsPage inherits VerticalLayout {
                 background: st.has-hover ? Ink.raised.with-alpha(0.6) : transparent; border-radius: 10px;
                 sl := VerticalLayout {
                     padding: 14px; spacing: 4px;
-                    Text { text: s.title; font-family: Ink.serif; font-size: 19px; color: Ink.text; wrap: word-wrap; }
-                    if s.summary != "": Text { text: s.summary; color: Ink.text2; font-size: 13.5px; wrap: word-wrap; max-height: 38px; overflow: elide; }
+                    Para { text: s.title; font-family: Ink.serif; font-size: 19px; color: Ink.text;  }
+                    if s.summary != "": Para { text: s.summary; color: Ink.text2; font-size: 13.5px;  max-height: 38px; overflow: elide; }
                     Text { text: s.source; color: Ink.text3; font-size: 12.5px; }
                 }
                 st := TouchArea { mouse-cursor: pointer; clicked => { root.open-url(s.url); } }
@@ -420,35 +481,7 @@ component NewsPage inherits VerticalLayout {
         }
     }
     // Teach me: one card at a time. Less, More or Love tune Top stories.
-    if root.mode == 1: VerticalLayout {
-        alignment: center;
-        if root.deck.length == 0: Empty { title: "You're through the deck"; body: "Your choices tune Top stories."; }
-        if root.deck.length > 0: HorizontalLayout {
-            alignment: center;
-            card := Card {
-                property <length> fling;
-                property <int> pending;
-                width: min(560px, parent.width); height: 380px;
-                transform-rotation: fling / 40px * 1deg;
-                opacity: 1 - abs(fling) / 700px;
-                animate fling { duration: 240ms; easing: ease-in; }
-                Timer { interval: 250ms; running: card.fling != 0; triggered => { root.react(card.pending); card.fling = 0; } }
-                VerticalLayout {
-                    padding: 30px; spacing: 14px;
-                    Label { text: root.deck[0].source; }
-                    Text { text: root.deck[0].title; font-family: Ink.serif; font-size: 27px; color: Ink.text; wrap: word-wrap; }
-                    Text { text: root.deck[0].summary; color: Ink.text2; font-size: 15px; wrap: word-wrap; vertical-stretch: 1; overflow: elide; }
-                    HorizontalLayout {
-                        spacing: 10px; alignment: center;
-                        Button { text: "Less like this"; clicked => { card.pending = -1; card.fling = -620px; } }
-                        Button { text: "More like this"; clicked => { card.pending = 1; card.fling = 620px; } }
-                        Button { text: "Love it"; primary: true; clicked => { card.pending = 2; card.fling = 1px; } }
-                    }
-                }
-            }
-        }
-        if root.deck.length > 0: Text { text: "Keys: ← less, → more, ↑ love"; color: Ink.text3; font-size: 12.5px; horizontal-alignment: center; }
-    }
+    if root.mode == 1: Deck { deck: root.deck; react(r) => { root.react(r); } vertical-stretch: 1; }
 }
 
 component TasksPage inherits VerticalLayout {
@@ -469,7 +502,7 @@ component TasksPage inherits VerticalLayout {
                 tl := HorizontalLayout {
                     padding: 10px; spacing: 14px;
                     Check { y: 11px; clicked => { root.toggle(t.id); } }
-                    VerticalLayout { horizontal-stretch: 1; Text { text: t.title; color: Ink.text; font-size: 15px; wrap: word-wrap; } if t.due != "": Text { text: t.due; color: t.overdue ? Ink.clay : Ink.text3; font-size: 12.5px; } }
+                    VerticalLayout { horizontal-stretch: 1; Para { text: t.title; color: Ink.text; font-size: 15px;  } if t.due != "": Text { text: t.due; color: t.overdue ? Ink.clay : Ink.text3; font-size: 12.5px; } }
                     if th.has-hover: Text { text: "Delete"; color: Ink.alert; font-size: 13px; vertical-alignment: center; TouchArea { mouse-cursor: pointer; clicked => { root.delete(t.id); } } }
                 }
             }
@@ -500,8 +533,8 @@ component AskPage inherits VerticalLayout {
                     background: t.mine ? Ink.text : Ink.raised; border-radius: 16px;
                     VerticalLayout {
                         padding: 14px; padding-top: 10px; padding-bottom: 10px; spacing: 6px;
-                        Text { text: t.text; color: t.mine ? Ink.paper : Ink.text; font-size: 15px; font-family: t.mine ? "" : Ink.serif; wrap: word-wrap; }
-                        if t.sources != "": Text { text: "From: " + t.sources; color: Ink.text3; font-size: 12px; wrap: word-wrap; }
+                        Para { text: t.text; color: t.mine ? Ink.paper : Ink.text; font-size: 15px; font-family: t.mine ? "" : Ink.serif;  }
+                        if t.sources != "": Para { text: "From: " + t.sources; color: Ink.text3; font-size: 12px;  }
                     }
                 }
             } }
@@ -528,12 +561,25 @@ component MailSetup inherits VerticalLayout {
     HorizontalLayout { spacing: 8px; alignment: start; for n[i] in root.names: Chip { text: n; on: root.provider == i; clicked => { root.provider = i; } } }
     Field { label: "Email address"; placeholder: "you@example.com"; text <=> root.email; }
     Field { label: "App password"; placeholder: "xxxx xxxx xxxx xxxx"; secret: true; text <=> root.password; accepted => { root.connect(); } }
-    Text { text: root.help[root.provider]; color: Ink.text2; font-size: 13px; wrap: word-wrap; }
-    if root.error != "": Text { text: root.error; color: Ink.alert; font-size: 13px; wrap: word-wrap; }
+    Para { text: root.help[root.provider]; color: Ink.text2; font-size: 13px;  }
+    if root.error != "": Para { text: root.error; color: Ink.alert; font-size: 13px;  }
     HorizontalLayout { alignment: start; Button { text: root.busy ? "Connecting…" : "Connect " + root.names[root.provider]; primary: true; enabled: !root.busy; clicked => { root.connect(); } } }
 }
 
-component SettingsPage inherits ScrollView {
+component SettingsTab inherits Rectangle {
+    in property <string> text;
+    in property <bool> on;
+    callback clicked;
+    height: 32px; border-radius: 7px;
+    background: on ? Ink.clay-soft : ta.has-hover ? Ink.raised : transparent;
+    animate background { duration: 100ms; }
+    Text { x: 12px; text: root.text; color: root.on ? Ink.clay : Ink.text; font-size: 14px; font-weight: root.on ? 600 : 400; vertical-alignment: center; height: parent.height; }
+    ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+}
+
+// Settings in tabs, like the Mac app: one topic per pane.
+component SettingsPage inherits HorizontalLayout {
+    in-out property <int> tab;
     in-out property <string> name;
     in property <string> email;
     in property <bool> has-key;
@@ -541,75 +587,133 @@ component SettingsPage inherits ScrollView {
     in-out property <string> ics;
     in-out property <bool> morning;
     in-out property <int> hour;
+    in-out property <string> instructions;
+    in property <[TopicRow]> topics;
+    in property <string> top-interests;
     in-out property <int> provider; in-out property <string> mail-email; in-out property <string> mail-password; in property <bool> busy; in property <string> error; in property <string> key-note;
-    callback save-name; callback save-ics; callback save-morning; callback connect; callback disconnect; callback save-key;
-    VerticalLayout {
-        padding: 40px; padding-top: 34px; spacing: 10px; alignment: start;
-        PageTitle { title: "Settings"; }
-        Rectangle { height: 10px; }
-        Label { text: "You"; }
-        HorizontalLayout { Field { label: "First name"; placeholder: "For the greeting and briefing"; text <=> root.name; edited => { root.save-name(); } max-width: 420px; } }
-        Rectangle { height: 14px; }
-        Label { text: "Mail"; }
-        if root.email != "": HorizontalLayout { spacing: 14px; alignment: start; Text { text: root.email; color: Ink.text; font-size: 15px; vertical-alignment: center; } Button { text: "Disconnect"; clicked => { root.disconnect(); } } }
-        if root.email == "": HorizontalLayout { MailSetup { provider <=> root.provider; email <=> root.mail-email; password <=> root.mail-password; busy: root.busy; error: root.error; connect => { root.connect(); } max-width: 520px; } }
-        Rectangle { height: 14px; }
-        Label { text: "AI"; }
-        if root.has-key: Text { text: "Gemini key saved in Windows Credential Manager."; color: Ink.text; font-size: 15px; }
-        HorizontalLayout { spacing: 10px; Field { label: root.has-key ? "Replace the Gemini key" : "Gemini API key"; placeholder: "AIza…"; secret: true; text <=> root.key-input; max-width: 420px; } VerticalLayout { alignment: end; Button { text: "Save key"; enabled: root.key-input != ""; clicked => { root.save-key(); } } } }
-        Text { text: root.key-note != "" ? root.key-note : "Free from aistudio.google.com. It sorts your mail, writes the briefing and reads it aloud."; color: Ink.text2; font-size: 13px; wrap: word-wrap; }
-        Rectangle { height: 14px; }
-        Label { text: "Calendar"; }
-        HorizontalLayout { Field { label: "Calendar link (.ics)"; placeholder: "https://… from Google, Outlook or iCloud"; text <=> root.ics; edited => { root.save-ics(); } max-width: 520px; } }
-        Text { text: "In Google Calendar: Settings, your calendar, “Secret address in iCal format”. Read-only."; color: Ink.text2; font-size: 13px; }
-        Rectangle { height: 14px; }
-        Label { text: "Morning briefing"; }
-        HorizontalLayout {
-            spacing: 14px; alignment: start;
-            Switch { checked <=> root.morning; toggled => { root.save-morning(); } }
-            Text { text: "Write it each morning and show a notification"; color: Ink.text; font-size: 14.5px; vertical-alignment: center; }
+    callback save-name; callback save-ics; callback save-morning; callback connect; callback disconnect; callback save-key; callback save-instructions;
+    callback toggle-topic(int); callback train; callback reset-interests;
+    Rectangle {
+        width: 200px;
+        VerticalLayout {
+            padding: 24px; padding-top: 34px; padding-right: 10px; spacing: 2px; alignment: start;
+            Text { text: "Settings"; font-family: Ink.serif; font-size: 26px; color: Ink.text; }
+            Rectangle { height: 14px; }
+            for t[i] in ["General", "Accounts", "AI provider", "Briefing", "Interests", "Calendar", "About"]: SettingsTab { text: t; on: root.tab == i; clicked => { root.tab = i; } }
         }
-        if root.morning: HorizontalLayout { spacing: 8px; alignment: start; for h in [6, 7, 8, 9]: Chip { text: h + ":00"; on: root.hour == h; clicked => { root.hour = h; root.save-morning(); } } }
-        Rectangle { height: 24px; }
-        Text { text: "everyday. is free and open source (GPL-3.0). Your mail stays on this computer."; color: Ink.text3; font-size: 12.5px; }
+    }
+    Rectangle { width: 1px; background: Ink.line; }
+    ScrollView {
+        horizontal-stretch: 1;
+        VerticalLayout {
+            padding: 40px; padding-top: 40px; spacing: 12px; alignment: start;
+            if root.tab == 0: Appear { VerticalLayout {
+                spacing: 12px;
+                Label { text: "You"; }
+                HorizontalLayout { Field { label: "First name"; placeholder: "For the greeting and briefing"; text <=> root.name; edited => { root.save-name(); } max-width: 420px; } }
+                Rectangle { height: 10px; }
+                Label { text: "Morning briefing"; }
+                HorizontalLayout { spacing: 14px; alignment: start; Switch { checked <=> root.morning; toggled => { root.save-morning(); } } Text { text: "Write it each morning"; color: Ink.text; font-size: 14.5px; vertical-alignment: center; } }
+                if root.morning: HorizontalLayout { spacing: 8px; alignment: start; for h in [5, 6, 7, 8, 9, 10]: Chip { text: h + ":00"; on: root.hour == h; clicked => { root.hour = h; root.save-morning(); } } }
+            } }
+            if root.tab == 1: Appear { VerticalLayout {
+                spacing: 12px;
+                Label { text: "Mail"; }
+                if root.email != "": HorizontalLayout { spacing: 14px; alignment: start; Text { text: root.email; color: Ink.text; font-size: 15px; vertical-alignment: center; } Button { text: "Disconnect"; clicked => { root.disconnect(); } } }
+                if root.email == "": Para { text: "Connect any mail account with an app password. It takes about a minute and nothing passes through a server of ours."; color: Ink.text2; font-size: 14.5px; }
+                if root.email == "": HorizontalLayout { MailSetup { provider <=> root.provider; email <=> root.mail-email; password <=> root.mail-password; busy: root.busy; error: root.error; connect => { root.connect(); } max-width: 520px; } }
+            } }
+            if root.tab == 2: Appear { VerticalLayout {
+                spacing: 12px;
+                Label { text: "Gemini"; }
+                if root.has-key: Text { text: "Key saved in Windows Credential Manager."; color: Ink.text; font-size: 15px; }
+                HorizontalLayout { spacing: 10px; Field { label: root.has-key ? "Replace the key" : "API key"; placeholder: "AIza…"; secret: true; text <=> root.key-input; max-width: 420px; } VerticalLayout { alignment: end; Button { text: "Save key"; enabled: root.key-input != ""; clicked => { root.save-key(); } } } }
+                Para { text: root.key-note != "" ? root.key-note : "Free from aistudio.google.com. It sorts your mail, writes the briefing and reads it aloud. The AI only ever returns text: it can't send, archive or delete anything."; color: Ink.text2; font-size: 13.5px; }
+            } }
+            if root.tab == 3: Appear { VerticalLayout {
+                spacing: 12px;
+                Label { text: "Standing instructions"; }
+                Para { text: "Added to every briefing. For example: “Keep it under 80 words”, “Always mention the weather first”."; color: Ink.text2; font-size: 13.5px; }
+                HorizontalLayout { Field { multi: true; placeholder: "Write how you like your briefing"; text <=> root.instructions; edited => { root.save-instructions(); } max-width: 560px; } }
+            } }
+            if root.tab == 4: Appear { VerticalLayout {
+                spacing: 12px;
+                Label { text: "Topics you follow"; }
+                Para { text: "Tap to add or remove. Top stories lean towards these."; color: Ink.text2; font-size: 13.5px; }
+                TopicPicker { topics: root.topics; toggle(i) => { root.toggle-topic(i); } }
+                Rectangle { height: 10px; }
+                Label { text: "What it has learned"; }
+                Para { text: root.top-interests != "" ? root.top-interests : "Nothing yet. Swipe a few stories to teach it."; color: Ink.text; font-size: 14.5px; }
+                HorizontalLayout { spacing: 10px; alignment: start; Button { text: "Train with more stories"; primary: true; clicked => { root.train(); } } Button { text: "Start over"; danger: true; clicked => { root.reset-interests(); } } }
+            } }
+            if root.tab == 5: Appear { VerticalLayout {
+                spacing: 12px;
+                Label { text: "Calendar"; }
+                HorizontalLayout { Field { label: "Calendar link (.ics)"; placeholder: "https://… from Google, Outlook or iCloud"; text <=> root.ics; edited => { root.save-ics(); } max-width: 560px; } }
+                Para { text: "In Google Calendar: Settings, your calendar, “Secret address in iCal format”. Outlook and iCloud can publish one too. everyday. only reads it."; color: Ink.text2; font-size: 13.5px; }
+            } }
+            if root.tab == 6: Appear { VerticalLayout {
+                spacing: 10px;
+                Wordmark { size: 34px; }
+                Text { text: "Version 0.2"; color: Ink.text2; font-size: 14px; }
+                Para { text: "Free and open source under GPL-3.0. Your mail stays on this computer and talks only to your mail server, your news sources and the AI you choose."; color: Ink.text2; font-size: 14px; max-width: 520px; }
+            } }
+        }
     }
 }
 
 component Onboarding inherits Rectangle {
     in-out property <int> step;
     in-out property <string> name;
+    in property <[TopicRow]> topics;
+    in property <[Story]> deck;
     in-out property <int> provider; in-out property <string> mail-email; in-out property <string> mail-password; in property <bool> busy; in property <string> error;
     in-out property <string> key-input; in property <string> key-note;
-    callback connect; callback save-key; callback finish; callback save-name;
+    callback connect; callback save-key; callback finish; callback save-name; callback toggle-topic(int); callback save-topics; callback react(int);
     background: Ink.paper;
     HorizontalLayout {
         alignment: center;
         VerticalLayout {
-            width: 520px; padding-top: 70px; padding-bottom: 40px; spacing: 18px;
-            HorizontalLayout { spacing: 4px; for i in [0, 1, 2, 3]: Rectangle { height: 3px; border-radius: 2px; background: i <= root.step ? Ink.clay : Ink.line; animate background { duration: 250ms; } } }
-            Rectangle { height: 30px; }
-            if root.step == 0: VerticalLayout {
+            width: min(640px, root.width - 80px); padding-top: 60px; padding-bottom: 40px; spacing: 18px;
+            HorizontalLayout { spacing: 4px; for i in [0, 1, 2, 3, 4, 5]: Rectangle { height: 3px; border-radius: 2px; background: i <= root.step ? Ink.clay : Ink.line; animate background { duration: 350ms; } } }
+            Rectangle { height: 24px; }
+            if root.step == 0: Appear { rise: 18px; VerticalLayout {
+                spacing: 16px;
+                Wordmark { size: 52px; }
+                Appear { delay: 150ms; Para { text: "Your mail, news and day, sorted quietly on this computer."; glyph: 0.47; font-family: Ink.serif; font-size: 30px; color: Ink.text; } }
+                Appear { delay: 300ms; Para { text: "Each morning you get a few sentences on what needs you. Everything else waits."; color: Ink.text2; font-size: 16px; } }
+            } }
+            if root.step == 1: Appear { VerticalLayout { spacing: 14px; Text { text: "What should we call you?"; font-family: Ink.serif; font-size: 30px; color: Ink.text; } Field { placeholder: "First name"; text <=> root.name; accepted => { if root.name != "" { root.save-name(); root.step = 2; } } } } }
+            if root.step == 2: Appear { VerticalLayout {
                 spacing: 14px;
-                Wordmark { size: 48px; }
-                Text { text: "Your mail, news and day, sorted quietly on this computer."; font-family: Ink.serif; font-size: 28px; color: Ink.text; wrap: word-wrap; }
-                Text { text: "Each morning you get a few sentences on what needs you. Everything else waits."; color: Ink.text2; font-size: 15.5px; wrap: word-wrap; }
-            }
-            if root.step == 1: VerticalLayout { spacing: 14px; alignment: start; Text { text: "What should we call you?"; font-family: Ink.serif; font-size: 30px; color: Ink.text; } Field { placeholder: "First name"; text <=> root.name; accepted => { root.save-name(); root.step = 2; } } }
-            if root.step == 2: VerticalLayout { spacing: 14px; Text { text: "Connect your mail"; font-family: Ink.serif; font-size: 30px; color: Ink.text; } MailSetup { provider <=> root.provider; email <=> root.mail-email; password <=> root.mail-password; busy: root.busy; error: root.error; connect => { root.connect(); } } }
-            if root.step == 3: VerticalLayout {
+                Text { text: "What are you into?"; font-family: Ink.serif; font-size: 30px; color: Ink.text; }
+                Para { text: "Pick a few. You'll fine-tune it next by swiping stories, and you can change it any time in Settings."; color: Ink.text2; font-size: 15px; }
+                TopicPicker { topics: root.topics; toggle(i) => { root.toggle-topic(i); } }
+            } }
+            if root.step == 3: Appear { VerticalLayout {
+                spacing: 10px; vertical-stretch: 1;
+                Text { text: "Teach it your taste"; font-family: Ink.serif; font-size: 30px; color: Ink.text; }
+                Para { text: "A few real stories from today. Tell it which you'd read."; color: Ink.text2; font-size: 15px; }
+                Deck { deck: root.deck; done-text: "That's enough to start. It keeps learning as you read."; react(r) => { root.react(r); } }
+            } }
+            if root.step == 4: Appear { VerticalLayout { spacing: 14px; Text { text: "Connect your mail"; font-family: Ink.serif; font-size: 30px; color: Ink.text; } MailSetup { provider <=> root.provider; email <=> root.mail-email; password <=> root.mail-password; busy: root.busy; error: root.error; connect => { root.connect(); } } } }
+            if root.step == 5: Appear { VerticalLayout {
                 spacing: 14px;
                 Text { text: "Add an AI key"; font-family: Ink.serif; font-size: 30px; color: Ink.text; }
                 Field { label: "Gemini API key"; placeholder: "AIza…"; secret: true; text <=> root.key-input; accepted => { root.save-key(); } }
-                Text { text: root.key-note != "" ? root.key-note : "Free from aistudio.google.com. Kept in Windows Credential Manager."; color: Ink.text2; font-size: 13px; wrap: word-wrap; }
+                Para { text: root.key-note != "" ? root.key-note : "Free from aistudio.google.com. Kept in Windows Credential Manager."; color: Ink.text2; font-size: 13.5px; }
                 HorizontalLayout { alignment: start; Button { text: "Save key"; primary: true; enabled: root.key-input != ""; clicked => { root.save-key(); } } }
-            }
+            } }
             Rectangle { vertical-stretch: 1; }
             HorizontalLayout {
                 alignment: start; spacing: 10px;
+                if root.step > 0: Button { text: "Back"; clicked => { root.step -= 1; } }
                 if root.step == 0: Button { text: "Get started"; primary: true; clicked => { root.step = 1; } }
                 if root.step == 1: Button { text: "Continue"; primary: true; enabled: root.name != ""; clicked => { root.save-name(); root.step = 2; } }
-                if root.step == 2: Button { text: "Skip for now"; clicked => { root.step = 3; } }
-                if root.step == 3: Button { text: "Skip for now"; clicked => { root.finish(); } }
+                if root.step == 2: Button { text: "Continue"; primary: true; clicked => { root.save-topics(); root.step = 3; } }
+                if root.step == 3: Button { text: root.deck.length == 0 ? "Continue" : "Skip"; primary: root.deck.length == 0; clicked => { root.step = 4; } }
+                if root.step == 4: Button { text: "Skip for now"; clicked => { root.step = 5; } }
+                if root.step == 5: Button { text: "Skip for now"; clicked => { root.finish(); } }
             }
         }
     }
@@ -644,7 +748,10 @@ export component AppWindow inherits Window {
     // Settings
     in-out property <string> name; in-out property <string> key-input; in property <string> key-note; in-out property <string> ics; in-out property <bool> morning; in-out property <int> hour: 7;
     in-out property <int> provider; in-out property <string> mail-email; in-out property <string> mail-password; in property <bool> busy; in property <string> error;
+    in property <[TopicRow]> topics; in property <string> top-interests; in-out property <string> instructions; in-out property <int> settings-tab;
+    in-out property <bool> collapsed;
 
+    callback toggle-topic(int); callback save-topics; callback train; callback reset-interests; callback save-instructions;
     callback refresh; callback write-briefing; callback listen; callback reply(int);
     callback open-thread(string); callback archive; callback trash; callback snooze(int); callback handled; callback send; callback undo;
     callback open-url(string); callback react(int);
@@ -655,6 +762,7 @@ export component AppWindow inherits Window {
     forward-focus: keys;
     keys := FocusScope {
         key-pressed(e) => {
+            if e.modifiers.control && e.text == "b" { root.collapsed = !root.collapsed; return accept; }
             if e.modifiers.control && e.text >= "1" && e.text <= "6" { root.page = e.text.to-float() - 1; return accept; }
             if root.page == 2 && root.news-mode == 1 {
                 if e.text == Key.LeftArrow { root.react(-1); return accept; }
@@ -669,27 +777,39 @@ export component AppWindow inherits Window {
 
     if root.ready && !root.onboarded: Onboarding {
         step <=> root.step; name <=> root.name; provider <=> root.provider; mail-email <=> root.mail-email; mail-password <=> root.mail-password; busy: root.busy; error: root.error;
-        key-input <=> root.key-input; key-note: root.key-note;
+        key-input <=> root.key-input; key-note: root.key-note; topics: root.topics; deck: root.deck;
         connect => { root.connect(); } save-key => { root.save-key(); } finish => { root.finish(); } save-name => { root.save-name(); }
+        toggle-topic(i) => { root.toggle-topic(i); } save-topics => { root.save-topics(); } react(r) => { root.react(r); }
     }
 
     if root.ready && root.onboarded: HorizontalLayout {
+        // The sidebar folds down to icons (Ctrl+B or the button at the top).
         Rectangle {
-            width: 216px; background: Ink.sidebar;
-            // One clay marker that glides to the selected page.
+            width: root.collapsed ? 64px : 216px; background: Ink.sidebar; clip: true;
+            animate width { duration: 240ms; easing: cubic-bezier(0.2, 0.8, 0.2, 1); }
             if root.page < 5: Rectangle {
-                x: 26px; width: 3px; height: 16px; border-radius: 2px; background: Ink.clay; z: 2;
-                y: nav0.absolute-position.y - root.absolute-position.y + 10px + root.page * 38px;
+                x: 14px; width: 3px; height: 16px; border-radius: 2px; background: Ink.clay; z: 2;
+                y: 74px + root.page * 40px;
                 animate y { duration: 260ms; easing: cubic-bezier(0.2, 0.9, 0.25, 1.15); }
             }
             VerticalLayout {
-                padding: 14px; padding-top: 22px; spacing: 2px;
-                HorizontalLayout { padding-left: 12px; padding-bottom: 22px; Wordmark { size: 23px; } }
-                nav0 := Rectangle { height: 0; }
-                for item[i] in ["Today", "Inbox", "News", "Tasks", "Ask"]: NavItem { text: item; on: root.page == i; badge: i == 1 ? root.needs.length : 0; clicked => { root.page = i; } }
+                padding: 10px; padding-top: 18px; spacing: 2px;
+                HorizontalLayout {
+                    height: 44px; padding-left: root.collapsed ? 10px : 14px; padding-bottom: 8px;
+                    if !root.collapsed: Wordmark { size: 23px; horizontal-stretch: 1; }
+                    Rectangle {
+                        width: 28px; height: 28px; border-radius: 6px; background: tg.has-hover ? Ink.paper : transparent;
+                        Image { source: @image-url("icons/sidebar.svg"); width: 18px; height: 18px; colorize: Ink.text3; }
+                        tg := TouchArea { mouse-cursor: pointer; clicked => { root.collapsed = !root.collapsed; } }
+                    }
+                }
+                for item[i] in [
+                    { name: "Today", icon: @image-url("icons/today.svg") }, { name: "Inbox", icon: @image-url("icons/inbox.svg") },
+                    { name: "News", icon: @image-url("icons/news.svg") }, { name: "Tasks", icon: @image-url("icons/tasks.svg") }, { name: "Ask", icon: @image-url("icons/ask.svg") }
+                ]: NavItem { text: item.name; icon: item.icon; collapsed: root.collapsed; on: root.page == i; badge: i == 1 ? root.needs.length : 0; clicked => { root.page = i; } }
                 Rectangle { vertical-stretch: 1; }
-                if root.syncing: Text { text: "Checking for new mail…"; color: Ink.text3; font-size: 12px; x: 12px; }
-                NavItem { text: "Settings"; on: root.page == 5; clicked => { root.page = 5; } }
+                if root.syncing && !root.collapsed: Text { text: "Checking for new mail…"; color: Ink.text3; font-size: 12px; x: 12px; }
+                NavItem { text: "Settings"; icon: @image-url("icons/settings.svg"); collapsed: root.collapsed; on: root.page == 5; clicked => { root.page = 5; } }
             }
         }
         Rectangle { width: 1px; background: Ink.line; }
@@ -711,9 +831,11 @@ export component AppWindow inherits Window {
             if root.page == 3: PageIn { TasksPage { tasks: root.tasks; input <=> root.task-input; add => { root.add-task(); } toggle(t) => { root.toggle-task(t); } delete(t) => { root.delete-task(t); } } }
             if root.page == 4: PageIn { AskPage { turns: root.turns; thinking: root.thinking; has-key: root.has-key; input <=> root.ask-input; ask(q) => { root.ask(q); } } }
             if root.page == 5: PageIn { SettingsPage {
-                name <=> root.name; email: root.email; has-key: root.has-key; key-input <=> root.key-input; ics <=> root.ics; morning <=> root.morning; hour <=> root.hour;
+                tab <=> root.settings-tab; name <=> root.name; email: root.email; has-key: root.has-key; key-input <=> root.key-input; ics <=> root.ics; morning <=> root.morning; hour <=> root.hour;
+                instructions <=> root.instructions; topics: root.topics; top-interests: root.top-interests;
                 provider <=> root.provider; mail-email <=> root.mail-email; mail-password <=> root.mail-password; busy: root.busy; error: root.error; key-note: root.key-note;
                 save-name => { root.save-name(); } save-ics => { root.save-ics(); } save-morning => { root.save-morning(); } connect => { root.connect(); } disconnect => { root.disconnect(); } save-key => { root.save-key(); }
+                save-instructions => { root.save-instructions(); } toggle-topic(i) => { root.toggle-topic(i); } train => { root.train(); } reset-interests => { root.reset-interests(); }
             } }
         }
     }

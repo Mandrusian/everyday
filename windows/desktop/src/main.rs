@@ -61,7 +61,7 @@ fn readable(body: &str) -> String {
 fn url_host(u: &str) -> String { u.split("//").nth(1).and_then(|r| r.split('/').next()).map(|h| h.trim_start_matches("www.").to_string()).unwrap_or_else(|| u.into()) }
 
 fn sections(text: &str) -> Vec<Section> {
-    skim::sections(text).into_iter().map(|s| Section { heading: s.heading.unwrap_or_default().into(), body: skim::strip(&s.body).into() }).collect()
+    skim::sections(text).into_iter().map(|s| { let body = skim::strip(&s.body); Section { heading: s.heading.unwrap_or_default().into(), breaks: body.matches('\n').count() as i32, body: body.into() } }).collect()
 }
 
 fn greeting(name: &str) -> String {
@@ -71,7 +71,18 @@ fn greeting(name: &str) -> String {
     if name.trim().is_empty() { format!("{g}.") } else { format!("{g}, {}.", name.trim()) }
 }
 
+/// The same topics as the Mac app (NewsCategory).
+const TOPICS: &[(&str, &str)] = &[("world", "World"), ("politics", "Politics"), ("australia", "Australia"), ("business", "Business"), ("economy", "Economy"), ("technology", "Technology"), ("ai", "AI"),
+    ("science", "Science"), ("space", "Space"), ("health", "Health"), ("climate", "Climate"), ("sport", "Sport"), ("gaming", "Gaming"), ("aviation", "Aviation"), ("entertainment", "Entertainment"),
+    ("film", "Film and TV"), ("music", "Music"), ("books", "Books"), ("design", "Design"), ("food", "Food"), ("travel", "Travel")];
+
+fn topic_rows(chosen: &[String]) -> ModelRc<TopicRow> {
+    let all: Vec<Topic> = TOPICS.iter().enumerate().map(|(i, (id, name))| Topic { id: (*id).into(), name: (*name).into(), on: chosen.iter().any(|c| c == id), index: i as i32 }).collect();
+    model(all.chunks(5).map(|c| TopicRow { items: model(c.to_vec()) }).collect())
+}
+
 struct State {
+    chosen: Vec<String>,
     rows: Vec<Value>,
     replies: Vec<Value>,
     briefing: String,
@@ -86,7 +97,7 @@ fn main() -> Result<(), slint::PlatformError> {
     if let Err(e) = everyday_mobile::init(&dir) { eprintln!("storage: {e}"); }
     let ui = AppWindow::new()?;
     let secrets: Secrets = Arc::new(OsSecrets::new("everyday."));
-    let state = Rc::new(std::cell::RefCell::new(State { rows: vec![], replies: vec![], briefing: String::new(), deck: vec![], turns: vec![], pending: None, sink: None }));
+    let state = Rc::new(std::cell::RefCell::new(State { chosen: vec![], rows: vec![], replies: vec![], briefing: String::new(), deck: vec![], turns: vec![], pending: None, sink: None }));
     let toast_timer = Rc::new(Timer::default());
     let send_timer = Rc::new(Timer::default());
 
@@ -133,6 +144,10 @@ fn main() -> Result<(), slint::PlatformError> {
         ui.set_morning(pref("morningOn") == "1");
         ui.set_hour(pref("morningHour").parse().unwrap_or(7));
         ui.set_greeting(greeting(&name).into());
+        ui.set_instructions(pref("briefingInstructions").into());
+        let chosen: Vec<String> = pref("categories").split(',').filter(|c| !c.is_empty()).map(String::from).collect();
+        ui.set_topics(topic_rows(&chosen)); state.borrow_mut().chosen = chosen;
+        ui.set_top_interests(run(s, "topInterests", json!({})).ok().and_then(|v| v.as_array().map(|a| a.iter().filter_map(|x| x.as_str()).collect::<Vec<_>>().join(", "))).unwrap_or_default().into());
         ui.set_date_text(chrono::Local::now().format("%A %-d %B").to_string().into());
         if let Ok(b) = run(s, "lastBriefing", json!({})) { if let Some(t) = b["text"].as_str() { state.borrow_mut().briefing = t.into(); ui.set_briefing(model(sections(t))); } }
         load_local(&ui);
@@ -215,7 +230,7 @@ fn main() -> Result<(), slint::PlatformError> {
         ui.set_security(row["security"].as_bool().unwrap_or(false));
         ui.set_messages(model(msgs.iter().map(|m| Msg { from: { let f = st(m, "from"); if f.is_empty() { st(m, "fromAddress") } else { f } },
             time: chrono::TimeZone::timestamp_opt(&chrono::Local, m["date"].as_i64().unwrap_or(0), 0).single().map(|d| d.format("%a %-d %b, %-H:%M").to_string()).unwrap_or_default().into(),
-            body: readable(m["body"].as_str().unwrap_or_default()).into(),
+            body: { let b = readable(m["body"].as_str().unwrap_or_default()); b.clone().into() }, breaks: readable(m["body"].as_str().unwrap_or_default()).matches('\n').count() as i32,
             attachments: m["attachments"].as_array().map(|a| a.iter().filter_map(|x| x.as_str()).collect::<Vec<_>>().join(", ")).unwrap_or_default().into() }).collect()));
     } });
 
@@ -264,6 +279,7 @@ fn main() -> Result<(), slint::PlatformError> {
         let Some(ui) = ui_w.upgrade() else { return };
         let first = { let mut st = st8.borrow_mut(); if st.deck.is_empty() { return; } st.deck.remove(0) };
         let _ = run(&*s, "react", json!({"url": first["url"], "title": first["title"], "source": first["source"], "reaction": r as f64}));
+        if let Some(t) = run(&*s, "topInterests", json!({})).ok().and_then(|v| v.as_array().map(|a| a.iter().filter_map(|x| x.as_str()).collect::<Vec<_>>().join(", "))) { ui.set_top_interests(t.into()); }
         let deck = st8.borrow().deck.clone();
         ui.set_deck(model(deck.iter().map(|v| Story { title: st(v, "title"), source: st(v, "source"), summary: skim::strip(v["summary"].as_str().unwrap_or_default()).into(), url: st(v, "url") }).collect()));
     } });
@@ -340,7 +356,7 @@ fn main() -> Result<(), slint::PlatformError> {
         let r = r.clone();
         bg(&ui, &s, move |s| run(s, "connectMail", json!({"email": email.clone(), "password": pw, "imapHost": ih, "imapPort": 993, "smtpHost": sh, "smtpPort": sp})).map(|_| email), move |ui, res| {
             ui.set_busy(false);
-            match res { Ok(email) => { ui.set_email(email.into()); ui.set_mail_password("".into()); if !ui.get_onboarded() { ui.set_step(3); } r(); } Err(e) => ui.set_error(e.into()) }
+            match res { Ok(email) => { ui.set_email(email.into()); ui.set_mail_password("".into()); if !ui.get_onboarded() { ui.set_step(5); } r(); } Err(e) => ui.set_error(e.into()) }
         });
     } });
     ui.on_disconnect({ let ui_w = ui.as_weak(); let s = secrets.clone(); let ll = load_local.clone(); move || {
@@ -357,6 +373,30 @@ fn main() -> Result<(), slint::PlatformError> {
             Err(e) => ui.set_key_note(e.into()),
         });
     } });
+    ui.on_toggle_topic({ let ui_w = ui.as_weak(); let st8 = state.clone(); let s = secrets.clone(); move |i| {
+        let Some(ui) = ui_w.upgrade() else { return };
+        let id = TOPICS[i as usize].0.to_string();
+        { let mut st = st8.borrow_mut(); if let Some(p) = st.chosen.iter().position(|c| *c == id) { st.chosen.remove(p); } else { st.chosen.push(id.clone()); } }
+        let chosen = st8.borrow().chosen.clone();
+        ui.set_topics(topic_rows(&chosen));
+        let _ = run(&*s, "setPref", json!({"key": "categories", "value": chosen.join(",")}));
+        if ui.get_onboarded() && chosen.contains(&id) { let _ = run(&*s, "seedInterests", json!({"categories": [id]})); }
+    } });
+    ui.on_save_topics({ let st8 = state.clone(); let s = secrets.clone(); let ui_w = ui.as_weak(); let ll = load_local.clone(); move || {
+        let chosen = st8.borrow().chosen.clone();
+        let _ = run(&*s, "seedInterests", json!({"categories": chosen}));
+        if let Some(ui) = ui_w.upgrade() { ll(&ui); }
+    } });
+    let interests_text = { let s = secrets.clone(); move || run(&*s, "topInterests", json!({})).ok().and_then(|v| v.as_array().map(|a| a.iter().filter_map(|x| x.as_str()).collect::<Vec<_>>().join(", "))).unwrap_or_default() };
+    let interests_text = Rc::new(interests_text);
+    ui.on_train({ let ui_w = ui.as_weak(); let ll = load_local.clone(); move || { let Some(ui) = ui_w.upgrade() else { return }; ll(&ui); ui.set_news_mode(1); ui.set_page(2); } });
+    ui.on_reset_interests({ let ui_w = ui.as_weak(); let s = secrets.clone(); let ll = load_local.clone(); let it = interests_text.clone(); let st8 = state.clone(); let toast = toast.clone(); move || {
+        let Some(ui) = ui_w.upgrade() else { return };
+        let _ = run(&*s, "resetInterests", json!({}));
+        let chosen = st8.borrow().chosen.clone(); let _ = run(&*s, "seedInterests", json!({"categories": chosen}));
+        ui.set_top_interests(it().into()); ll(&ui); toast("Started over from your topics".into());
+    } });
+    ui.on_save_instructions({ let ui_w = ui.as_weak(); let s = secrets.clone(); move || { let Some(ui) = ui_w.upgrade() else { return }; let _ = run(&*s, "setPref", json!({"key": "briefingInstructions", "value": ui.get_instructions().trim()})); } });
     ui.on_finish({ let ui_w = ui.as_weak(); let s = secrets.clone(); move || { let Some(ui) = ui_w.upgrade() else { return }; let _ = run(&*s, "setPref", json!({"key": "onboarded", "value": "1"})); ui.set_onboarded(true); ui.set_page(0); } });
 
     ui.run()

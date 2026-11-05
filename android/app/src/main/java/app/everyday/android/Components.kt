@@ -120,3 +120,18 @@ fun EmptyNote(title: String, body: String, modifier: Modifier = Modifier) {
 }
 
 fun Modifier.clickableNoRipple(onClick: () -> Unit): Modifier = composed { clickable(remember { MutableInteractionSource() }, null, onClick = onClick) }
+
+/** Topic chips that flow onto as many lines as they need; each pops in a moment after the last. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+fun TopicPicker(model: AppModel) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        TOPICS.forEachIndexed { i, (id, name) ->
+            var shown by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) { kotlinx.coroutines.delay(i * 25L); shown = true }
+            androidx.compose.animation.AnimatedVisibility(shown, enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.scaleIn(initialScale = 0.85f)) {
+                Chip(name, { model.toggleTopic(id) }, accent = id in model.topics)
+            }
+        }
+    }
+}

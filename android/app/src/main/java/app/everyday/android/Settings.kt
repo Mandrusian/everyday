@@ -1,6 +1,7 @@
 package app.everyday.android
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
@@ -78,6 +79,13 @@ fun SettingsSheet(model: AppModel, onClose: () -> Unit) {
     var hour by remember { mutableIntStateOf(7) }
     var editMail by remember { mutableStateOf(false) }
     var editKey by remember { mutableStateOf(false) }
+    var training by remember { mutableStateOf(false) }
+    if (training) androidx.compose.ui.window.Dialog({ training = false; scope.launch { model.loadLocal() } }, androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+        Column(Modifier.fillMaxSize().background(p.paper).systemBarsPadding().padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) { Text("Teach it your taste", style = Type.heading, color = p.text, modifier = Modifier.weight(1f)); TextButton({ training = false }) { Text("Done", color = p.clay) } }
+            Box(Modifier.weight(1f)) { Deck(model) }
+        }
+    }
     LaunchedEffect(Unit) {
         ics = Core.run("getPref", json("key" to "icsUrl")) as String
         morning = Core.run("getPref", json("key" to "morningOn")) == "1"
@@ -101,6 +109,15 @@ fun SettingsSheet(model: AppModel, onClose: () -> Unit) {
                 Text("Gemini key saved", style = Type.body, color = p.text, modifier = Modifier.weight(1f))
                 QuietButton("Replace", { editKey = true })
             } else AiKeySetup(model) { editKey = false }
+
+            SectionLabel("Interests", Modifier.padding(top = 18.dp))
+            Text("Top stories lean towards these. Tap to add or remove.", style = Type.small, color = p.text2, modifier = Modifier.padding(bottom = 8.dp))
+            TopicPicker(model)
+            Text(if (model.learned.isEmpty()) "Nothing learned yet. Swipe a few stories to teach it." else "It has learned: " + model.learned.joinToString(", "), style = Type.small, color = p.text, modifier = Modifier.padding(top = 12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 8.dp)) {
+                QuietButton("Train with more stories", { training = true })
+                QuietButton("Start over", { model.resetInterests() })
+            }
 
             SectionLabel("Calendar", Modifier.padding(top = 18.dp))
             Field("Calendar link (.ics)", ics, { ics = it.trim(); model.setPref("icsUrl", it.trim()) }, placeholder = "https://… from Google, Outlook or iCloud", keyboard = KeyboardType.Uri)

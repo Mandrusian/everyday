@@ -1,6 +1,7 @@
 package app.everyday.android
 
 import androidx.compose.animation.*
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
@@ -21,7 +22,7 @@ fun Onboarding(model: AppModel) {
     var name by remember { mutableStateOf("") }
     fun finish() = scope.launch { Core.run("setPref", json("key" to "onboarded", "value" to "1")); model.onboarded = true }
     Column(Modifier.fillMaxSize().systemBarsPadding().imePadding().padding(24.dp)) {
-        Row { repeat(4) { i -> Box(Modifier.weight(1f).padding(horizontal = 2.dp).height(3.dp).background(if (i <= step) p.clay else p.line, androidx.compose.foundation.shape.CircleShape)) } }
+        Row { repeat(6) { i -> Box(Modifier.weight(1f).padding(horizontal = 2.dp).height(3.dp).background(if (i <= step) p.clay else p.line, androidx.compose.foundation.shape.CircleShape)) } }
         AnimatedContent(step, transitionSpec = { (slideInHorizontally { it / 3 } + fadeIn()) togetherWith (slideOutHorizontally { -it / 3 } + fadeOut()) }, label = "step", modifier = Modifier.weight(1f)) { s ->
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 48.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 when (s) {
@@ -34,7 +35,17 @@ fun Onboarding(model: AppModel) {
                         Text("What should we call you?", style = Type.title, color = p.text)
                         Field("", name, { name = it }, placeholder = "First name")
                     }
-                    2 -> { Text("Connect your mail", style = Type.title, color = p.text); MailSetup(model) { step = 3 } }
+                    2 -> {
+                        Text("What are you into?", style = Type.title, color = p.text)
+                        Text("Pick a few. You'll fine-tune it next by swiping stories, and you can change it any time in Settings.", style = Type.body, color = p.text2)
+                        TopicPicker(model)
+                    }
+                    3 -> {
+                        Text("Teach it your taste", style = Type.title, color = p.text)
+                        Text("Swipe right for more like this, left for less, up to love it.", style = Type.body, color = p.text2)
+                        Box(Modifier.fillMaxWidth().height(480.dp)) { Deck(model) }
+                    }
+                    4 -> { Text("Connect your mail", style = Type.title, color = p.text); MailSetup(model) { step = 5 } }
                     else -> { Text("Add an AI key", style = Type.title, color = p.text); AiKeySetup(model) { finish() } }
                 }
             }
@@ -42,7 +53,9 @@ fun Onboarding(model: AppModel) {
         when (step) {
             0 -> PrimaryButton("Get started", { step = 1 })
             1 -> PrimaryButton("Continue", { model.name = name.trim(); model.setPref("name", name.trim()); step = 2 }, enabled = name.isNotBlank())
-            2 -> TextButton({ step = 3 }, Modifier.fillMaxWidth()) { Text("Skip for now", color = p.text2) }
+            2 -> PrimaryButton("Continue", { model.saveTopics(); step = 3 })
+            3 -> if (model.deck.isEmpty()) PrimaryButton("Continue", { step = 4 }) else TextButton({ step = 4 }, Modifier.fillMaxWidth()) { Text("Skip", color = p.text2) }
+            4 -> TextButton({ step = 5 }, Modifier.fillMaxWidth()) { Text("Skip for now", color = p.text2) }
             else -> TextButton({ finish() }, Modifier.fillMaxWidth()) { Text("Skip for now", color = p.text2) }
         }
     }
