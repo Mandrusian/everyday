@@ -1,8 +1,11 @@
+import java.util.Properties
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
+val signing = Properties().apply { rootProject.file("keystore.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) } }
 
 android {
     namespace = "app.everyday.android"
@@ -20,6 +23,15 @@ android {
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }
+    signingConfigs {
+        create("release") {
+            if (signing.isNotEmpty()) {
+                storeFile = rootProject.file(signing.getProperty("storeFile")); storePassword = signing.getProperty("storePassword")
+                keyAlias = signing.getProperty("keyAlias"); keyPassword = signing.getProperty("keyPassword")
+            }
+        }
+    }
+    buildTypes { release { isMinifyEnabled = false; if (signing.isNotEmpty()) signingConfig = signingConfigs.getByName("release") } }
     packaging { jniLibs { useLegacyPackaging = false } }
 }
 

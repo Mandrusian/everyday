@@ -13,3 +13,13 @@ roast_video/
 .env
 .env.*
 !.env.example
+
+# Personal working notes stay local
+MEMORIES.md
+NOTES.md
+PLAN.md
+ROADMAP.md
+
+# Release signing: back these up, they are needed for every future update
+android/release.keystore
+android/keystore.properties

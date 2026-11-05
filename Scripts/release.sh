@@ -48,10 +48,38 @@ else
 fi
 
 echo "▸ Make dmg"
-rm -rf build/dmg "$DMG"; mkdir -p build/dmg
+# A laid-out window: paper background with the wordmark and an arrow, app on the left, Applications on the right.
+rm -rf build/dmg "$DMG" build/rw.dmg; mkdir -p build/dmg/.background
 cp -R $APP build/dmg/everyday.app
 ln -s /Applications build/dmg/Applications
-hdiutil create -volname "everyday." -srcfolder build/dmg -ov -format UDZO "$DMG" >/dev/null
+tiffutil -cathidpicheck Resources/dmg/background.png Resources/dmg/background@2x.png -out build/dmg/.background/background.tiff >/dev/null
+hdiutil create -volname "everyday." -srcfolder build/dmg -ov -format UDRW -fs HFS+ build/rw.dmg >/dev/null
+DEV=$(hdiutil attach -readwrite -noverify -noautoopen build/rw.dmg | awk '/Apple_HFS/ {print $1}')
+sleep 1
+osascript <<'AS' || echo "  (Finder layout skipped: allow Terminal to control Finder for the laid-out window)"
+tell application "Finder"
+  tell disk "everyday."
+    open
+    set current view of container window to icon view
+    set toolbar visible of container window to false
+    set statusbar visible of container window to false
+    set the bounds of container window to {200, 120, 840, 562}
+    set o to the icon view options of container window
+    set arrangement of o to not arranged
+    set icon size of o to 96
+    set text size of o to 13
+    set background picture of o to file ".background:background.tiff"
+    set position of item "everyday.app" of container window to {170, 215}
+    set position of item "Applications" of container window to {470, 215}
+    update without registering applications
+    delay 1
+    close
+  end tell
+end tell
+AS
+sync; hdiutil detach "$DEV" -quiet || hdiutil detach "$DEV" -force -quiet
+hdiutil convert build/rw.dmg -format UDZO -imagekey zlib-level=9 -o "$DMG" >/dev/null
+rm -f build/rw.dmg
 
 if [ -n "${DEVELOPER_ID:-}" ]; then
   codesign --force --timestamp --sign "$DEVELOPER_ID" "$DMG"
