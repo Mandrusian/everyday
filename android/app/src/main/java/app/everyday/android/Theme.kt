@@ -19,7 +19,10 @@ val Light = Palette(Color(0xFFF5F0E4), Color(0xFFFBF8F0), Color(0xFFE3DACA), Col
 val Dark = Palette(Color(0xFF1C1A17), Color(0xFF25231F), Color(0xFF38342D), Color(0xFFECE8DF), Color(0xFFA39E92), Color(0xFF8C887D), Color(0xFFE08A6A), Color(0xFF3A2A22))
 
 val LocalPalette = staticCompositionLocalOf { Light }
-val Serif = FontFamily.Serif
+/** Source Serif 4 (SIL Open Font License, see android/FONT-LICENSE-SourceSerif4.txt), bundled so headlines are serif on every phone. */
+@OptIn(androidx.compose.ui.text.ExperimentalTextApi::class)
+private fun serif(w: Int) = androidx.compose.ui.text.font.Font(R.font.source_serif, FontWeight(w), variationSettings = androidx.compose.ui.text.font.FontVariation.Settings(FontWeight(w), androidx.compose.ui.text.font.FontStyle.Normal))
+val Serif = FontFamily(serif(300), serif(400), serif(500), serif(600), serif(700))
 
 object Type {
     val title = TextStyle(fontFamily = Serif, fontSize = 30.sp, lineHeight = 36.sp)
