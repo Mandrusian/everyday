@@ -154,13 +154,15 @@ struct TodayView: View {
         if !model.generatingBriefing, model.briefing != nil, !attention.isEmpty {
             let suggested = (model.briefing?.replies ?? []).filter { !model.usedReplies.contains($0.id) }
             let allIDs = attention.flatMap { att -> [String] in switch att { case .row(let r): return [r.message.id]; case .bundle(let b): return b.rows.map { $0.message.id } } }
-            let defaults = suggested.isEmpty && model.briefing?.replies == nil
-                ? [QuickReply(id: "d-me", label: "That was me", kind: .handled, messageIds: allIDs), QuickReply(id: "d-remind", label: "Remind me tonight", kind: .remind, messageIds: Array(allIDs.prefix(3)))].filter { !model.usedReplies.contains($0.id) } : []
-            // Gemini writes the buttons for this situation. "That was me" is guaranteed whenever automated notices are open, even if the model left it out.
-            let autoIDs = attention.flatMap { att -> [String] in switch att { case .row(let r): return MailBundler.isAutomated(r.message, category: r.triage?.category) ? [r.message.id] : []; case .bundle(let b): return b.rows.map { $0.message.id } } }
-            let hasHandled = suggested.contains { $0.kind == .handled }
-            let guaranteed = (!hasHandled && !autoIDs.isEmpty && !model.usedReplies.contains("d-me")) ? [QuickReply(id: "d-me", label: "That was me", kind: .handled, messageIds: autoIDs)] : []
-            let chips = guaranteed + suggested + defaults
+            // Without an AI key there are no suggestions, so offer one quiet default. With a key, wait for the AI's buttons instead of showing placeholders.
+            let defaults = !model.ai.isConfigured
+                ? [QuickReply(id: "d-remind", label: "Remind me tonight", kind: .remind, messageIds: Array(allIDs.prefix(3)))].filter { !model.usedReplies.contains($0.id) } : []
+            // The AI writes the buttons for this situation. Repeats (same label, or a second "handled" button) are dropped.
+            var seenLabels = Set<String>(), seenHandled = false
+            let chips = (suggested + defaults).filter { q in
+                if q.kind == .handled { if seenHandled { return false }; seenHandled = true }
+                return seenLabels.insert(q.label.lowercased()).inserted
+            }
             if !chips.isEmpty {
                 HStack(alignment: .top, spacing: 10) {
                     Text("REPLY").font(.ui(12, .semibold)).tracking(1.2).foregroundStyle(Palette.text3).padding(.top, 5)
@@ -200,10 +202,10 @@ struct TodayView: View {
     }
 
     @ViewBuilder private func attentionButtons(handled: [String], ignore: [EmailMessage], open: @escaping () -> Void, task: MailRow?) -> some View {
-        Button("That was me") { model.markHandled(handled) }.buttonStyle(QuietButtonStyle(compact: true))
         if let r = task, r.triage?.needsReply == true { Button("Review") { open() }.buttonStyle(PrimaryButtonStyle(compact: true)) }
         else { Button("Open") { open() }.buttonStyle(QuietButtonStyle(compact: true)) }
         Menu {
+            Button("That was me") { model.markHandled(handled) }
             if let r = task, let t = r.triage, !t.actionItems.isEmpty || t.deadline != nil {
                 Button("Add as task") { model.perform(QuickReply(label: "", kind: .task, messageIds: [r.message.id])) }
             }
