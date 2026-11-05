@@ -62,7 +62,7 @@ fn load_articles(st: &Store, limit: usize) -> Vec<news::Article> {
 fn ai_call(key: &str, r: &ai::Request) -> Result<String, String> { ai::complete(ai::Provider::Gemini, MODEL, key, "", r).map_err(|e| e.to_string()) }
 
 /// Runs one command. `secrets` holds what Kotlin passed in; anything set during the call is returned to be saved.
-pub fn run(cmd: &str, args: &Value, secrets: &MemorySecrets) -> Result<Value, String> {
+pub fn run(cmd: &str, args: &Value, secrets: &dyn SecretStore) -> Result<Value, String> {
     let key = || secrets.get("ai.gemini").filter(|k| !k.is_empty());
     let need_key = || key().ok_or_else(|| "Add a Gemini key in Settings first.".to_string());
     let password = |acct: &Account| secrets.get(&secrets::password_key(&acct.email)).ok_or_else(|| "The saved password is missing. Connect your mail again.".to_string());

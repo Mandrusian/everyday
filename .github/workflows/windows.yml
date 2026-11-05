@@ -27,7 +27,7 @@ jobs:
         with:
           workspaces: windows
       - name: Test everyday-core
-        run: cargo test -p everyday-core --locked
+        run: cargo test -p everyday-core -p everyday-mobile --locked
 
   build:
     name: Build installer
@@ -35,31 +35,32 @@ jobs:
     runs-on: windows-latest
     defaults:
       run:
-        working-directory: windows/app
+        working-directory: windows/desktop
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: windows
-      - name: Install Tauri CLI
-        run: cargo install tauri-cli --version "^2" --locked
+      # Native Slint interface (no WebView), packaged as an NSIS installer and an MSI.
+      - name: Install cargo-packager
+        run: cargo install cargo-packager --locked
       - name: Build
-        run: cargo tauri build
+        run: cargo packager --release
       - name: Checksums
         shell: pwsh
         run: |
-          Get-ChildItem -Recurse ../target/release/bundle -Include *.exe,*.msi | ForEach-Object {
+          Get-ChildItem ../target/packages -Include *.exe,*.msi -Recurse | ForEach-Object {
             $h = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
-            "$h  $($_.Name)" | Out-File -Append -Encoding ascii ../target/release/bundle/SHA256SUMS.txt
+            "$h  $($_.Name)" | Out-File -Append -Encoding ascii ../target/packages/SHA256SUMS.txt
           }
       - uses: actions/upload-artifact@v4
         with:
           name: everyday-windows
           path: |
-            windows/target/release/bundle/nsis/*.exe
-            windows/target/release/bundle/msi/*.msi
-            windows/target/release/bundle/SHA256SUMS.txt
+            windows/target/packages/*.exe
+            windows/target/packages/*.msi
+            windows/target/packages/SHA256SUMS.txt
           if-no-files-found: error
 
   release:
