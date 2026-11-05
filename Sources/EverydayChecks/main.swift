@@ -18,6 +18,22 @@ do {
     check("fts search", try db.searchMail("leas").contains("m1"))
 } catch { check("db", false, "\(error)") }
 
+do {
+    let db = try Database(url: nil)
+    enum RollbackCheck: Error { case deliberate }
+    try db.transaction {
+        try db.put("check", id: "outer", "keep")
+        do {
+            try db.transaction {
+                try db.put("check", id: "inner", "discard")
+                throw RollbackCheck.deliberate
+            }
+        } catch RollbackCheck.deliberate { }
+        check("db: nested rollback preserves outer work", try db.get("check", id: "outer", as: String.self) == "keep" && db.get("check", id: "inner", as: String.self) == nil)
+    }
+    check("db: outer transaction commits after nested rollback", try db.get("check", id: "outer", as: String.self) == "keep")
+} catch { check("db transactions", false, "\(error)") }
+
 
 // Pure helpers
 check("extractJSON fenced", extractJSON("```json\n[{\"a\":1}]\n```") != nil)
@@ -253,6 +269,12 @@ do {
     check("quick add: plain text keeps medium priority and no date", b.title == "book dentist" && b.due == nil && b.priority == .medium)
     let c = QuickAdd.parse("call Mum tomorrow low", now: now, calendar: cal)
     check("quick add: tomorrow + low", c.title == "call Mum" && c.priority == .low && c.due != nil && cal.isDate(c.due!, inSameDayAs: cal.date(byAdding: .day, value: 1, to: now)!), c.title)
+    let historicalNow = cal.date(from: DateComponents(year: 2024, month: 2, day: 28, hour: 12))!
+    let leapTomorrow = QuickAdd.parse("call Mum tomorrow 5pm", now: historicalNow, calendar: cal)
+    let leapParts = leapTomorrow.due.map { cal.dateComponents([.year, .month, .day, .hour], from: $0) }
+    check("quick add: relative dates use the supplied clock across leap day", leapParts?.year == 2024 && leapParts?.month == 2 && leapParts?.day == 29 && leapParts?.hour == 17)
+    let nextFriday = QuickAdd.parse("pay rent friday 5pm", now: cal.date(from: DateComponents(year: 2024, month: 3, day: 1, hour: 18))!, calendar: cal)
+    check("quick add: a weekday time already passed means next week", nextFriday.due.map { cal.component(.day, from: $0) } == 8)
     let xml = OPML.export([FeedSource(name: "A & B", url: "https://a.test/feed", categories: [.ai, .science]), FeedSource(name: "C", url: "https://c.test/rss", categories: [.politics])])
     let back = OPML.parse(Data(xml.utf8))
     check("OPML round trip", back.count == 2 && back[0].name == "A & B" && back[0].categories == [.ai, .science] && back[1].url == "https://c.test/rss")
@@ -391,15 +413,42 @@ do {
     let mdb = try Database(url: nil)
     let mm = MailService(db: mdb, auth: GoogleAuth(prefs: mp), intelligence: Intelligence(ai: AIService(db: mdb, prefs: mp), prefs: mp), prefs: mp, imap: base)
     check("accounts: the inbox knows both accounts, first one first", mm.accountEmails == ["first@example.com", "second@example.com"], "\(mm.accountEmails)")
+    try mdb.exec("""
+        CREATE TEMP TRIGGER simulate_mail_write_failure BEFORE INSERT ON docs
+        WHEN NEW.kind='email' AND NEW.id='imap:7:2'
+        BEGIN SELECT RAISE(ABORT, 'simulated mail write failure'); END;
+        """)
+    do {
+        _ = try await mm.sync()
+        check("sync: a failed mail write reports failure", false)
+    } catch let error as DBError {
+        check("sync: a failed mail write reports failure", error.message.contains("simulated mail write failure"))
+    }
+    check("sync: a failed batch rolls back earlier messages", mm.emails(limit: 100).allSatisfy { $0.account == "second@example.com" })
+    check("sync: a failed batch does not advance its cursor", try mdb.get("meta", id: "mailSyncState", as: String.self) == nil)
+    check("sync: other accounts still commit after one account fails", try mm.emails(limit: 100).count == 2 && mdb.get("meta", id: "mailSyncState.second@example.com", as: String.self) != nil)
+    check("sync: partial failure does not report a fully successful sync", mm.lastSync == nil)
+    check("sync: search entries roll back with the failed batch", try mdb.searchMail("Hello").allSatisfy { $0.split(separator: ":").count == 4 })
+    try mdb.exec("DROP TRIGGER simulate_mail_write_failure")
     _ = try await mm.sync()
     let all = mm.emails(limit: 100)
     let firstMail = all.filter { mm.owner($0) == "first@example.com" }, secondMail = all.filter { mm.owner($0) == "second@example.com" }
     check("accounts: each account's mail is stored apart, with no id clashes", firstMail.count == 2 && secondMail.count == 2 && Set(all.map(\.id)).count == 4, "first \(firstMail.count) second \(secondMail.count) ids \(all.map(\.id))")
     check("accounts: the first account keeps the original id format", firstMail.allSatisfy { $0.id.split(separator: ":").count == 3 } && secondMail.allSatisfy { $0.id.split(separator: ":").count == 4 })
     check("accounts: each account remembers its own sync position", (try? mdb.get("meta", id: "mailSyncState", as: String.self)) != nil && (try? mdb.get("meta", id: "mailSyncState.second@example.com", as: String.self)) != nil)
-    check("accounts: replies go out from the account the mail arrived in", secondMail.first.map { mm.backend(for: $0).accountEmail } == "second@example.com")
+    check("accounts: replies go out from the account the mail arrived in", try secondMail.first.map { try mm.backend(for: $0).accountEmail } == "second@example.com")
     let again = try await mm.sync()
     check("accounts: a second sync adds nothing new", again == 0 && mm.emails(limit: 100).count == 4, "\(again) changes, \(mm.emails(limit: 100).count) stored")
+    mm.disconnect(email: "second@example.com", wipe: false)
+    let beforeMissingAccountAction = srv.commands().count
+    do {
+        try await mm.commitTrash(firstMail + secondMail, .fromUserAction())
+        check("accounts: a missing owner blocks a mixed-account batch", false)
+    } catch MailAccountError.unavailable(let email) {
+        check("accounts: a missing owner blocks a mixed-account batch", email == "second@example.com")
+    }
+    check("accounts: no remote writes happen before every owner is resolved", srv.commands().count == beforeMissingAccountAction)
+    check("accounts: retained mail remains readable after disconnect", mm.emails(limit: 100).count == 4)
     mm.disconnect(email: "second@example.com", wipe: true)
     check("accounts: removing one account deletes only its mail", mm.accountEmails == ["first@example.com"] && mm.emails(limit: 100).count == 2 && Keychain.get(ImapBackend.passwordKey("second@example.com")) == nil)
     mm.disconnect(wipe: true)

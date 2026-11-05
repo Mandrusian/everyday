@@ -17,6 +17,8 @@ public struct DBError: Error, LocalizedError {
 public final class Database: @unchecked Sendable {
     private var db: OpaquePointer?
     private let queue = DispatchQueue(label: "everyday.db")
+    private let queueKey = DispatchSpecificKey<Bool>()
+    private var savepointID = 0
     public let url: URL?
 
     public static func defaultURL() -> URL {
@@ -29,6 +31,7 @@ public final class Database: @unchecked Sendable {
     /// Pass nil for an in-memory database (used by checks).
     public init(url: URL?) throws {
         self.url = url
+        queue.setSpecific(key: queueKey, value: true)
         let path = url?.path ?? ":memory:"
         if sqlite3_open_v2(path, &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nil) != SQLITE_OK {
             throw DBError(message: "Cannot open database at \(path)")
@@ -39,6 +42,29 @@ public final class Database: @unchecked Sendable {
     }
 
     deinit { sqlite3_close(db) }
+
+    private func serialized<T>(_ body: () throws -> T) rethrows -> T {
+        if DispatchQueue.getSpecific(key: queueKey) == true { return try body() }
+        return try queue.sync(execute: body)
+    }
+
+    /// A synchronous unit of work. Holds the database queue throughout; nested transactions use savepoints.
+    public func transaction<T>(_ body: () throws -> T) throws -> T {
+        try serialized {
+            savepointID += 1
+            let name = "everyday_\(savepointID)"
+            try exec("SAVEPOINT \(name)")
+            do {
+                let result = try body()
+                try exec("RELEASE SAVEPOINT \(name)")
+                return result
+            } catch {
+                _ = try? exec("ROLLBACK TO SAVEPOINT \(name)")
+                _ = try? exec("RELEASE SAVEPOINT \(name)")
+                throw error
+            }
+        }
+    }
 
     private func migrate() throws {
         try exec("""
@@ -54,7 +80,7 @@ public final class Database: @unchecked Sendable {
 
     @discardableResult
     public func exec(_ sql: String, _ params: [SQLValue] = []) throws -> Int {
-        try queue.sync {
+        try serialized {
             if params.isEmpty {
                 var err: UnsafeMutablePointer<CChar>?
                 if sqlite3_exec(db, sql, nil, nil, &err) != SQLITE_OK {
@@ -73,7 +99,7 @@ public final class Database: @unchecked Sendable {
     }
 
     public func query(_ sql: String, _ params: [SQLValue] = []) throws -> [[String: SQLValue]] {
-        try queue.sync {
+        try serialized {
             let stmt = try prepare(sql, params)
             defer { sqlite3_finalize(stmt) }
             var rows: [[String: SQLValue]] = []

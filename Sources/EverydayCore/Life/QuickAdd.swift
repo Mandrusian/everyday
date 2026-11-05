@@ -23,9 +23,23 @@ public enum QuickAdd {
             let ns = text as NSString
             if let m = det.matches(in: text, range: NSRange(location: 0, length: ns.length)).first, let d = m.date {
                 var date = d
-                // "friday" alone should mean the coming Friday, never today in the past
-                if date < now, !calendar.isDateInToday(date) { date = calendar.date(byAdding: .day, value: 7, to: date) ?? date }
-                let hasTime = text.range(of: #"(?i)\d\s?(am|pm)|\d{1,2}:\d{2}|noon|midnight|tonight|morning|evening|afternoon"#, options: .regularExpression, range: text.range(of: ns.substring(with: m.range))) != nil
+                let matched = ns.substring(with: m.range)
+                let hasTime = matched.range(of: #"(?i)\d\s?(am|pm)|\d{1,2}:\d{2}|noon|midnight|tonight|morning|evening|afternoon"#, options: .regularExpression) != nil
+                // NSDataDetector uses the wall clock. Resolve common relative days against the caller's
+                // reference date instead, retaining the detected time (including tonight/noon).
+                let hasExplicitDate = matched.range(of: #"(?i)\b\d{4}\b|\b\d{1,2}[/-]\d{1,2}\b|\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b"#, options: .regularExpression) != nil
+                if !hasExplicitDate, let relative = matched.range(of: #"(?i)\b(today|tomorrow|tonight|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b"#, options: .regularExpression) {
+                    let word = matched[relative].lowercased()
+                    let weekdays = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
+                    let weekday = weekdays.firstIndex(of: word).map { $0 + 1 }
+                    let days = weekday.map { ($0 - calendar.component(.weekday, from: now) + 7) % 7 } ?? (word == "tomorrow" ? 1 : 0)
+                    let day = calendar.date(byAdding: .day, value: days, to: calendar.startOfDay(for: now)) ?? now
+                    if hasTime {
+                        let time = calendar.dateComponents([.hour, .minute, .second], from: d)
+                        date = calendar.date(bySettingHour: time.hour ?? 0, minute: time.minute ?? 0, second: time.second ?? 0, of: day) ?? day
+                    } else { date = day }
+                    if weekday != nil, date < now { date = calendar.date(byAdding: .day, value: 7, to: date) ?? date }
+                }
                 due = hasTime ? date : calendar.startOfDay(for: date)
                 text = ns.replacingCharacters(in: m.range, with: "")
             }

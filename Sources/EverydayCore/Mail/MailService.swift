@@ -14,6 +14,16 @@ public struct MailRow: Identifiable, Hashable, Sendable {
     public init(message: EmailMessage, triage: Triage?, threadCount: Int) { self.message = message; self.triage = triage; self.threadCount = threadCount }
 }
 
+public enum MailAccountError: Error, LocalizedError {
+    case unavailable(String)
+    public var errorDescription: String? {
+        switch self {
+        case .unavailable(let email):
+            return "Reconnect \(email.isEmpty ? "the original mail account" : email) in Settings → Accounts before acting on this message."
+        }
+    }
+}
+
 public final class MailService: @unchecked Sendable {
     private let db: Database
     public let auth: GoogleAuth
@@ -52,9 +62,12 @@ public final class MailService: @unchecked Sendable {
 
     /// Which account a message belongs to. Mail stored before multiple accounts belongs to the first.
     public func owner(_ m: EmailMessage) -> String { (m.account ?? accountEmail ?? "").lowercased() }
-    public func backend(for m: EmailMessage) -> MailBackend {
+    public func backend(for m: EmailMessage) throws -> MailBackend {
         let o = owner(m)
-        return backends.first { ($0.accountEmail ?? "").lowercased() == o } ?? backend
+        guard let match = backends.first(where: { ($0.accountEmail ?? "").lowercased() == o }) else {
+            throw MailAccountError.unavailable(o)
+        }
+        return match
     }
     /// The first account keeps the original sync key so an existing mailbox is not fetched again.
     private func stateKey(_ b: MailBackend) -> String {
@@ -79,28 +92,38 @@ public final class MailService: @unchecked Sendable {
                 let known = emails(limit: 5000).filter { owner($0) == email }
                 let label = all.count > 1 ? "\(email): " : ""
                 let batch = try await b.sync(days: days, known: known, state: state, progress: progress.map { p in { @Sendable in p(label + $0) } })
-                for id in batch.removedIDs { removeLocal(id) }
-                for var m in batch.upserts { m.account = email; store(m) }
-                if let st = batch.state { try db.put("meta", id: key, st) }
-                try db.put("meta", id: "mailLastSync.\(email)", Date())
+                try db.transaction {
+                    for id in batch.removedIDs { try removeLocalThrowing(id) }
+                    for var m in batch.upserts { m.account = email; try storeThrowing(m) }
+                    if let st = batch.state { try db.put("meta", id: key, st) }
+                    try db.put("meta", id: "mailLastSync.\(email)", Date())
+                }
                 changed += batch.upserts.count + batch.removedIDs.count
             } catch { if firstError == nil { firstError = error } }
         }
         let cutoff = Date().addingTimeInterval(-Double(days) * 86400)
         _ = try? db.exec("DELETE FROM docs WHERE kind='email' AND sort < ?", [.double(cutoff.timeIntervalSince1970)])
-        try db.put("meta", id: "mailLastSync", Date())
         if let e = firstError { throw e }
+        try db.put("meta", id: "mailLastSync", Date())
         return changed
     }
 
     private func store(_ m: EmailMessage) {
-        try? db.put("email", id: m.id, sort: m.date.timeIntervalSince1970, m)
-        try? db.indexMail(id: m.id, subject: m.subject, sender: "\(m.fromName) \(m.fromAddress)", body: String(m.body.prefix(20000)))
+        try? storeThrowing(m)
+    }
+
+    private func storeThrowing(_ m: EmailMessage) throws {
+        try db.put("email", id: m.id, sort: m.date.timeIntervalSince1970, m)
+        try db.indexMail(id: m.id, subject: m.subject, sender: "\(m.fromName) \(m.fromAddress)", body: String(m.body.prefix(20000)))
     }
 
     private func removeLocal(_ id: String) {
-        try? db.delete("email", id: id); try? db.delete("triage", id: id)
-        _ = try? db.exec("DELETE FROM mail_fts WHERE id=?", [.text(id)])
+        try? removeLocalThrowing(id)
+    }
+
+    private func removeLocalThrowing(_ id: String) throws {
+        try db.delete("email", id: id); try db.delete("triage", id: id)
+        try db.exec("DELETE FROM mail_fts WHERE id=?", [.text(id)])
     }
 
     /// Disconnects every account.
@@ -387,11 +410,12 @@ public final class MailService: @unchecked Sendable {
     public func restore(_ msgs: [EmailMessage]) { for m in msgs { store(m) } }
 
     /// Groups messages by the account they came from, so each server is only told about its own mail.
-    private func byAccount(_ msgs: [EmailMessage]) -> [(MailBackend, [EmailMessage])] {
-        Dictionary(grouping: msgs) { owner($0) }.map { (_, group) in (backend(for: group[0]), group) }
+    private func byAccount(_ msgs: [EmailMessage]) throws -> [(MailBackend, [EmailMessage])] {
+        // Resolve every owner before performing any remote action, so a missing account cannot cause a partial batch.
+        try Dictionary(grouping: msgs) { owner($0) }.map { (_, group) in (try backend(for: group[0]), group) }
     }
-    public func commitArchive(_ msgs: [EmailMessage], _ approval: UserApproval) async throws { for (b, g) in byAccount(msgs.filter(\.inInbox)) { try await b.archive(g) } }
-    public func commitTrash(_ msgs: [EmailMessage], _ approval: UserApproval) async throws { for (b, g) in byAccount(msgs) { try await b.trash(g) } }
+    public func commitArchive(_ msgs: [EmailMessage], _ approval: UserApproval) async throws { for (b, g) in try byAccount(msgs.filter(\.inInbox)) { try await b.archive(g) } }
+    public func commitTrash(_ msgs: [EmailMessage], _ approval: UserApproval) async throws { for (b, g) in try byAccount(msgs) { try await b.trash(g) } }
 
     /// Marks a conversation read locally and returns the unread messages it changed.
     public func setReadLocally(threadId: String) -> [EmailMessage] {
@@ -399,7 +423,7 @@ public final class MailService: @unchecked Sendable {
         for m in unread { var x = m; x.labelIds.removeAll { $0 == "UNREAD" }; store(x) }
         return unread
     }
-    public func commitMarkRead(_ msgs: [EmailMessage], _ approval: UserApproval) async throws { for (b, g) in byAccount(msgs) { try await b.markRead(g) } }
+    public func commitMarkRead(_ msgs: [EmailMessage], _ approval: UserApproval) async throws { for (b, g) in try byAccount(msgs) { try await b.markRead(g) } }
 
     public func archive(threadId: String, _ approval: UserApproval) async throws {
         let msgs = removeLocally(threadId: threadId)
