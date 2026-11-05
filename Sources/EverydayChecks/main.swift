@@ -32,6 +32,14 @@ do {
         check("db: nested rollback preserves outer work", try db.get("check", id: "outer", as: String.self) == "keep" && db.get("check", id: "inner", as: String.self) == nil)
     }
     check("db: outer transaction commits after nested rollback", try db.get("check", id: "outer", as: String.self) == "keep")
+    try db.put("email", id: "expired", sort: 0, "old body")
+    try db.put("triage", id: "expired", "old summary")
+    try db.indexMail(id: "expired", subject: "uniqueexpired", sender: "old", body: "old body")
+    try db.put("email", id: "fresh", sort: 10, "new body")
+    try db.indexMail(id: "fresh", subject: "uniquefresh", sender: "new", body: "new body")
+    try db.pruneMail(before: Date(timeIntervalSince1970: 5))
+    check("db: mail retention removes expired search entries and triage", try db.get("email", id: "expired", as: String.self) == nil && db.get("triage", id: "expired", as: String.self) == nil && db.searchMail("uniqueexpired").isEmpty)
+    check("db: mail retention preserves fresh mail and unrelated data", try db.searchMail("uniquefresh") == ["fresh"] && db.get("check", id: "outer", as: String.self) == "keep")
 } catch { check("db transactions", false, "\(error)") }
 
 
@@ -275,6 +283,9 @@ do {
     check("quick add: relative dates use the supplied clock across leap day", leapParts?.year == 2024 && leapParts?.month == 2 && leapParts?.day == 29 && leapParts?.hour == 17)
     let nextFriday = QuickAdd.parse("pay rent friday 5pm", now: cal.date(from: DateComponents(year: 2024, month: 3, day: 1, hour: 18))!, calendar: cal)
     check("quick add: a weekday time already passed means next week", nextFriday.due.map { cal.component(.day, from: $0) } == 8)
+    let explicit = QuickAdd.parse("renew on Friday, 1 November 2024", now: historicalNow, calendar: cal)
+    let explicitParts = explicit.due.map { cal.dateComponents([.year, .month, .day], from: $0) }
+    check("quick add: an explicit date with a weekday is not re-anchored", explicitParts?.year == 2024 && explicitParts?.month == 11 && explicitParts?.day == 1)
     let xml = OPML.export([FeedSource(name: "A & B", url: "https://a.test/feed", categories: [.ai, .science]), FeedSource(name: "C", url: "https://c.test/rss", categories: [.politics])])
     let back = OPML.parse(Data(xml.utf8))
     check("OPML round trip", back.count == 2 && back[0].name == "A & B" && back[0].categories == [.ai, .science] && back[1].url == "https://c.test/rss")

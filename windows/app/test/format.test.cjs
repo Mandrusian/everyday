@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { skim, sections, briefing } = require('../ui/format.js');
+const { skim, sections, briefing, securityNotice } = require('../ui/format.js');
 
 test('all seven highlight kinds render without leaking tags', () => {
   for (const kind of 'uadpmnl') {
@@ -24,4 +24,12 @@ test('headings separate sections and empty sections disappear', () => {
 test('section bodies keep paragraph breaks and highlights', () => {
   assert.equal(briefing('## Needs you\n<<a|Reply>> today.\n\nPay rent.'),
     '<h3 class="brief-heading">Needs you</h3><p><span class="a">Reply</span> today.</p><p>Pay rent.</p>');
+});
+test('only account security notices get a prominent That was me action', () => {
+  const message = (subject, snippet = '') => ({ from_address: 'notifications@example.com', subject, snippet });
+  assert.equal(securityNotice(message('Security alert', 'New sign-in on Mac')), true);
+  assert.equal(securityNotice(message('A personal access token was added')), true);
+  assert.equal(securityNotice(message('Newly granted account access')), true);
+  assert.equal(securityNotice(message('[everyday] Run failed: Windows - main')), false);
+  assert.equal(securityNotice(message('Thursday roadmap sync')), false);
 });

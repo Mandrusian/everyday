@@ -3,7 +3,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use chrono::Local;
-use everyday_core::{ai, briefing, calendar, chat, interest, schedule, tts, bundler::{self, Category}, imap, mailrules, net, news, secrets::{self, SecretStore}, service, smtp, store::Store, tasks};
+use everyday_core::{ai, briefing, calendar, chat, interest, schedule, tts, bundler::{self, Category}, mailrules, net, news, secrets::{self, SecretStore}, service, smtp, store::Store, tasks};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Mutex;

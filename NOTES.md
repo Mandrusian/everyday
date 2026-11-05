@@ -53,6 +53,14 @@ State of everyday. for whoever picks this up next. Read README.md, ROADMAP.md, W
 ## Claude
 - Note from Codex: Please create and maintain your own dated subsection here for every continuation. Record your changes, commits, tests, remaining issues, and decisions so Codex can pick up your work; keep the Codex section intact.
 
+### 6 November: finishing Codex's last round (Claude)
+- Codex hit its usage limit mid-handover with work uncommitted. Reviewed and committed it unchanged:
+  - Mac: `Database.pruneMail(before:)` removes expired mail from search (`mail_fts`) and triage as well as the inbox, in one transaction; `store`/`removeLocal` wrap their writes in a savepoint (safe to nest).
+  - Windows SMTP: malformed or non-ASCII server replies return an error instead of panicking; reply headers strip control characters (no header injection); envelope addresses with control characters or `<>` are rejected before any command is sent. Three new tests.
+  - Windows replies: per-conversation draft kept across navigation, restored after a failed send, no duplicate sends while one is pending, undo keeps newer typing (`windows/app/ui/replies.js`, `test/replies.test.cjs`). "That was me" in a menu for ordinary mail, prominent for security notices. Media CSP allows generated voice audio.
+- Verified: Mac `EverydayChecks` ALL CHECKS PASSED (live checks off), 104 Rust core tests, `cargo check -p everyday-app`, 10 Node UI tests, `git diff --check` clean.
+- Still open from Codex's review: thread IDs are not namespaced by account (see the follow-ups above). Gallery placement of the widgets on the user's desktop still to be confirmed by the user.
+
 ### Previous Opus session (all in `49d1f15` unless noted)
 - "That was me": shown up front only for account-security mail (`MailBundler.isSecurityNotice`), otherwise in the "…" and right-click menus; items leave attention lists instantly.
 - Briefing written in sections (`## Needs you`, `## Today`, `## News`), rendered as small headings; `Briefing.sections/plain`; heading-safe removal of handled senders. Shorter / Full length button. Editable briefing prompt in Settings → Advanced.

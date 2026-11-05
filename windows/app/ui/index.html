@@ -18,6 +18,7 @@ input,textarea{width:100%;max-width:820px;margin:6px 0;padding:10px 14px;border-
 .u{color:#e8916f;font-weight:600}.d{color:#e0a84a;font-weight:600}.pn{color:#7fb0d6;font-weight:600}.n{color:#8fc29a;font-weight:600}
 .a{color:#e7aa83;font-weight:600}.m{color:#a8c785;font-weight:600}.l{color:#b4a3d8;font-weight:600}
 .brief p{margin:8px 0 14px}.brief-heading{font:600 12px var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin:18px 0 4px}
+.row-actions{display:flex;align-items:center;gap:8px}.more-actions{position:relative}.more-actions summary{cursor:pointer;list-style:none;padding:4px 10px;border-radius:8px;background:var(--line)}.more-actions[open]>button{position:absolute;right:0;top:100%;white-space:nowrap;z-index:2;border:1px solid var(--text2)}
 .split{display:grid;grid-template-columns:360px 1fr;gap:18px}.list{max-height:78vh;overflow:auto}.sel{background:var(--bg)}
 .deck{max-width:560px}.deck .card{padding:22px}.deck h2{font:400 28px var(--serif);margin:6px 0 10px}.bubble{padding:10px 14px;border-radius:12px;margin:8px 0;max-width:720px;white-space:pre-wrap}.me{background:var(--line)}.ai{background:var(--raised);border:1px solid var(--line)}
 #wiz{position:fixed;inset:0;background:var(--bg);display:none;place-items:center;z-index:5}#wiz>div{max-width:520px;width:90%}#wiz h1{font-size:34px}
@@ -25,4 +26,4 @@ input,textarea{width:100%;max-width:820px;margin:6px 0;padding:10px 14px;border-
 </style></head><body><div class="app">
 <aside><div class="brand">everyday<b>.</b></div><nav id="nav"><a data-v="today" class="on">Today</a><a data-v="inbox">Inbox</a><a data-v="news">News</a><a data-v="tasks">Tasks</a><a data-v="assistant">Ask everyday.</a><a data-v="settings">Settings</a></nav><div id="status">Connect mail in Settings</div></aside>
 <main id="main"></main></div><div id="wiz"><div id="wizb"></div></div><div id="banner"><span id="bt"></span><button id="bu" style="display:none">Undo</button></div>
-<script src="format.js"></script><script src="main.js"></script></body></html>
+<script src="format.js"></script><script src="replies.js"></script><script src="main.js"></script></body></html>

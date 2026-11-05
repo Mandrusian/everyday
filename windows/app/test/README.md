@@ -12,7 +12,7 @@ Open http://127.0.0.1:8790/test/app.html. The copied HTML shell is kept in step 
 Formatting regression checks (no browser dependency):
 
 ```bash
-node --test test/format.test.cjs
+node --test test/*.test.cjs
 ```
 
 Exercise Today, section headings and highlights, handled notices, tasks, inbox, assistant, news, and Settings. This is not a substitute for running the Tauri app on Windows.

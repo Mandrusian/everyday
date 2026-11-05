@@ -102,14 +102,14 @@ public final class MailService: @unchecked Sendable {
             } catch { if firstError == nil { firstError = error } }
         }
         let cutoff = Date().addingTimeInterval(-Double(days) * 86400)
-        _ = try? db.exec("DELETE FROM docs WHERE kind='email' AND sort < ?", [.double(cutoff.timeIntervalSince1970)])
+        try db.pruneMail(before: cutoff)
         if let e = firstError { throw e }
         try db.put("meta", id: "mailLastSync", Date())
         return changed
     }
 
     private func store(_ m: EmailMessage) {
-        try? storeThrowing(m)
+        try? db.transaction { try storeThrowing(m) }
     }
 
     private func storeThrowing(_ m: EmailMessage) throws {
@@ -118,7 +118,7 @@ public final class MailService: @unchecked Sendable {
     }
 
     private func removeLocal(_ id: String) {
-        try? removeLocalThrowing(id)
+        try? db.transaction { try removeLocalThrowing(id) }
     }
 
     private func removeLocalThrowing(_ id: String) throws {

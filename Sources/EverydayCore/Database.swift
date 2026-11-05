@@ -200,6 +200,17 @@ public final class Database: @unchecked Sendable {
         try exec("INSERT INTO mail_fts(id,subject,sender,body) VALUES(?,?,?,?)", [.text(id), .text(subject), .text(sender), .text(body)])
     }
 
+    /// Apply the mail retention window to search text and triage as well as the message documents.
+    public func pruneMail(before cutoff: Date) throws {
+        let ids = "SELECT id FROM docs WHERE kind='email' AND sort < ?"
+        let parameters: [SQLValue] = [.double(cutoff.timeIntervalSince1970)]
+        try transaction {
+            try exec("DELETE FROM mail_fts WHERE id IN (\(ids))", parameters)
+            try exec("DELETE FROM docs WHERE kind='triage' AND id IN (\(ids))", parameters)
+            try exec("DELETE FROM docs WHERE kind='email' AND sort < ?", parameters)
+        }
+    }
+
     public func searchMail(_ text: String, limit: Int = 50) throws -> [String] {
         let tokens = text.split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map { "\($0)*" }
         guard !tokens.isEmpty else { return [] }

@@ -12,7 +12,9 @@ fn reply<S: Read + Write>(r: &mut BufReader<S>) -> Result<(u16, String), SmtpErr
     loop {
         let mut line = String::new(); if r.read_line(&mut line)? == 0 { return Err(SmtpError::Io("The server closed the connection.".into())); }
         let line = line.trim_end().to_string(); text.push_str(&line); text.push('\n');
-        if line.len() < 4 || line.as_bytes()[3] != b'-' { return Ok((line[..3.min(line.len())].parse().unwrap_or(0), text)); }
+        let code = line.get(..3).and_then(|s| s.parse::<u16>().ok())
+            .ok_or_else(|| SmtpError::Io("The mail server returned an invalid SMTP response.".into()))?;
+        if line.len() < 4 || line.as_bytes()[3] != b'-' { return Ok((code, text)); }
     }
 }
 
@@ -37,6 +39,11 @@ pub fn send_after_greeting<S: Read + Write>(stream: S, user: &str, password: &st
 }
 
 fn session<S: Read + Write>(mut r: BufReader<S>, user: &str, password: &str, from: &str, to: &[String], message: &[u8]) -> Result<(), SmtpError> {
+    // Envelope values are commands, not display headers. Never allow a supplied address to add a command.
+    if std::iter::once(from).chain(to.iter().map(String::as_str)).any(|address|
+        address.is_empty() || !address.contains('@') || address.chars().any(|c| c.is_control() || c == '<' || c == '>')) {
+        return Err(SmtpError::Rejected("The sender or recipient address is invalid.".into()));
+    }
     let ehlo = cmd(&mut r, "EHLO everyday.local", &[250])?;
     if !password.is_empty() && ehlo.to_uppercase().contains("AUTH") {
         let token = B64.encode(format!("\0{user}\0{password}"));
@@ -65,10 +72,13 @@ pub fn bare_address(s: &str) -> String { match (s.rfind('<'), s.rfind('>')) { (S
 
 /// A reply message: Re: subject, threading headers, base64 UTF-8 body.
 pub fn compose_reply(me: &str, original: &ReplyTo, body: &str, date_rfc2822: &str, unique: &str) -> Vec<u8> {
-    let subject = if original.subject.to_lowercase().starts_with("re:") { original.subject.to_string() } else { format!("Re: {}", original.subject) };
-    let mut refs: Vec<String> = original.references.to_vec(); if !original.message_id.is_empty() { refs.push(format!("<{}>", original.message_id.trim_matches(|c| c == '<' || c == '>'))); }
-    let mut out = format!("From: {me}\r\nTo: {} <{}>\r\nSubject: {subject}\r\nDate: {date_rfc2822}\r\nMessage-ID: <{unique}@everyday.local>\r\nMIME-Version: 1.0\r\n", original.from_name, original.from_address);
-    if !original.message_id.is_empty() { out.push_str(&format!("In-Reply-To: <{}>\r\n", original.message_id.trim_matches(|c| c == '<' || c == '>'))); }
+    let clean = |s: &str| s.chars().map(|c| if c.is_control() { ' ' } else { c }).collect::<String>();
+    let subject = clean(original.subject);
+    let subject = if subject.to_lowercase().starts_with("re:") { subject } else { format!("Re: {subject}") };
+    let message_id = clean(original.message_id.trim_matches(|c| c == '<' || c == '>'));
+    let mut refs: Vec<String> = original.references.iter().map(|r| clean(r)).collect(); if !message_id.is_empty() { refs.push(format!("<{message_id}>")); }
+    let mut out = format!("From: {}\r\nTo: {} <{}>\r\nSubject: {subject}\r\nDate: {}\r\nMessage-ID: <{}@everyday.local>\r\nMIME-Version: 1.0\r\n", clean(me), clean(original.from_name), clean(original.from_address), clean(date_rfc2822), clean(unique));
+    if !message_id.is_empty() { out.push_str(&format!("In-Reply-To: <{message_id}>\r\n")); }
     if !refs.is_empty() { out.push_str(&format!("References: {}\r\n", refs.join(" "))); }
     out.push_str("Content-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: base64\r\n\r\n");
     for chunk in B64.encode(body.as_bytes()).as_bytes().chunks(76) { out.push_str(std::str::from_utf8(chunk).unwrap()); out.push_str("\r\n"); }
@@ -112,4 +122,18 @@ mod tests {
         assert!(send(std::io::Cursor::new(vec![]), "u", "", "a@b.c", &[], b"x").is_err());
     }
     #[test] fn bare_addresses() { assert_eq!(bare_address("Oscar F <oscar@acme.com>"), "oscar@acme.com"); assert_eq!(bare_address(" x@y.z "), "x@y.z"); }
+    #[test] fn malformed_unicode_responses_return_an_error_without_panicking() {
+        let mut stream = BufReader::new(std::io::Cursor::new("💥 broken response\r\n".as_bytes().to_vec()));
+        assert!(matches!(reply(&mut stream), Err(SmtpError::Io(_))));
+    }
+    #[test] fn reply_headers_cannot_inject_new_headers() {
+        let raw = compose_reply("me@example.com", &ReplyTo { from_name: "Oscar\r\nBcc: hidden@example.com", from_address: "oscar@acme.com", subject: "Roadmap\nX-Injected: yes", message_id: "a@x\r\nInjected: true", references: &["<root@x>\nOther: value".into()] }, "Reply body", "Thu, 05 Nov 2026 09:00:00 +1000", "id");
+        let text = String::from_utf8(raw).unwrap();
+        assert!(!text.contains("\r\nBcc:") && !text.contains("\nX-Injected:") && !text.contains("\r\nInjected:") && !text.contains("\nOther:"));
+    }
+    #[test] fn envelope_addresses_cannot_inject_smtp_commands() {
+        let stream = std::io::Cursor::new(b"220 ready\r\n".to_vec());
+        let result = send(stream, "u", "", "me@example.com", &["a@b.c>\r\nRCPT TO:<hidden@example.com".into()], b"body");
+        assert!(matches!(result, Err(SmtpError::Rejected(_))));
+    }
 }

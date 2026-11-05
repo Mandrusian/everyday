@@ -24,7 +24,10 @@
     (section.heading ? `<h3 class="brief-heading">${esc(section.heading)}</h3>` : "") +
     section.body.split(/\n\s*\n/).map(p => `<p>${skim(p).replace(/\n/g, "<br>")}</p>`).join("")
   ).join("");
-  const api = Object.freeze({ esc, skim, sections, briefing });
+  const securityNotice = message => String(message.from_address || "").includes("@") &&
+    /(security alert|sign[- ]?in|signed in|new (device|login|sign)|log[- ]?in (attempt|from)|password (was )?(changed|reset|created|removed)|app password|2-step|two[- ]factor|verification code|one[- ]time (code|passcode)|access (was )?granted|(granted|given) (account )?access|connected to your (google )?account|(oauth|third[- ]party) app|personal access token|recovery (email|phone)|passkey)/i
+      .test(`${message.subject || ""} ${message.snippet || ""}`);
+  const api = Object.freeze({ esc, skim, sections, briefing, securityNotice });
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.EverydayFormat = api;
 })(globalThis);

@@ -1,13 +1,22 @@
 const { invoke } = window.__TAURI__.core;
 const $ = (s, r = document) => r.querySelector(s), main = $("#main");
-const { esc, skim, briefing: renderBriefing } = window.EverydayFormat;
+const { esc, skim, briefing: renderBriefing, securityNotice } = window.EverydayFormat;
 let view = "today", selected = null, state = { email: null, has_ai_key: false }, brief = "", replies = [], used = new Set(), busy = {};
 
 function say(text, undo, secs = 4) {
-  const b = $("#banner"); $("#bt").textContent = text; const u = $("#bu"); u.style.display = undo ? "" : "none"; u.onclick = () => { undo && undo(); b.style.display = "none"; };
+  const b = $("#banner"); $("#bt").textContent = text; const u = $("#bu"); u.style.display = undo ? "" : "none"; u.onclick = () => { b.style.display = "none"; undo && undo(); };
   b.style.display = "flex"; clearTimeout(say.t); say.t = setTimeout(() => b.style.display = "none", secs * 1000);
 }
 const fail = e => say(String(e), null, 7);
+const replyStore = new window.EverydayReplies({
+  send: (threadId, body) => invoke("send_reply", { threadId, body }),
+  changed: updateReplyComposer, failed: fail, sent: () => say("Reply sent.")
+});
+function updateReplyComposer(id) {
+  if (view !== "inbox" || selected !== id || !$("#rb")) return;
+  $("#rb").value = replyStore.draft(id);
+  $("#sd").disabled = replyStore.isPending(id);
+}
 
 async function refreshState() { state = await invoke("app_state"); $("#status").textContent = state.email ? `${state.email} · click to sync` : "Connect mail in Settings"; }
 $("#status").onclick = async () => { if (!state.email) return show("settings"); say("Syncing…"); try { say(await invoke("sync_mail")); } catch (e) { fail(e); } show(view); };
@@ -40,7 +49,7 @@ async function today() {
   ${brief ? `<div class="brief">${renderBriefing(brief)}</div><p><button id="ls">Listen</button></p>` : `<p class="muted">${state.has_ai_key ? "" : "Add a Gemini key in Settings to write briefings. "}<button class="p" id="wb">Write briefing</button></p>`}
   <div class="chips">${replies.map((r, i) => used.has(i) ? "" : `<button data-i="${i}">${esc(r.label)}</button>`).join("")}</div></div>
   <div id="up"></div><div class="card">${rows.map(r => `<div class="row"><div class="t"><b>${esc(r.from)}</b>: ${esc(r.subject)}<small>${esc(r.snippet)}</small></div>
-    <div><button data-h="${r.thread_id}">That was me</button> <button data-o="${r.thread_id}">Open</button></div></div>`).join("") || '<p class="muted">Nothing needs you.</p>'}</div>`;
+    <div class="row-actions">${securityNotice(r) ? `<button data-h="${esc(r.thread_id)}">That was me</button>` : `<details class="more-actions"><summary aria-label="More actions for ${esc(r.subject)}">…</summary><button data-h="${esc(r.thread_id)}">Mark as handled</button></details>`} <button data-o="${r.thread_id}">Open</button></div></div>`).join("") || '<p class="muted">Nothing needs you.</p>'}</div>`;
   invoke("upcoming").then(ev => { if (ev.length) $("#up").innerHTML = `<div class="card" style="padding:12px 18px"><b class="muted" style="font-size:12px;letter-spacing:.1em">UP NEXT</b>${ev.map(e => `<div class="row"><div class="t">${esc(e.title)}<small>${esc(e.when)}${e.location ? " · " + esc(e.location) : ""}</small></div></div>`).join("")}</div>`; }).catch(() => {});
   const ls = $("#ls"); if (ls) ls.onclick = () => listen(brief);
   const wb = $("#wb"); if (wb) wb.onclick = async () => { wb.disabled = true; wb.textContent = "Writing…"; await writeBriefing(); };
@@ -72,18 +81,19 @@ async function inbox() {
 async function thread(id) {
   const msgs = await invoke("thread", { threadId: id }); const last = msgs.at(-1); if (!last) return;
   $("#thread").innerHTML = `<h2 style="font:400 26px var(--serif);margin:0 0 10px">${esc(last.subject)}</h2>
-  <div style="margin-bottom:12px"><button id="th">That was me</button> <button id="sn">Snooze until tomorrow</button> <button id="vp">VIP</button> <button id="ar">Archive</button> <button id="tr">Trash</button></div>
+  <div class="row-actions" style="margin-bottom:12px">${securityNotice(last) ? '<button id="th">That was me</button>' : '<details class="more-actions"><summary aria-label="More conversation actions">…</summary><button id="th">Mark as handled</button></details>'} <button id="sn">Snooze until tomorrow</button> <button id="vp">VIP</button> <button id="ar">Archive</button> <button id="tr">Trash</button></div>
   ${msgs.map(m => `<div class="card" style="padding:12px 18px"><b>${esc(m.from_name)}</b> <span class="muted">${esc(m.from_address)}</span><p style="white-space:pre-wrap">${esc(m.body.slice(0, 4000))}</p>${m.attachment_names?.length ? `<p class="muted">Attachments: ${m.attachment_names.map(esc).join(", ")}</p>` : ""}</div>`).join("")}
-  <textarea id="rb" rows="5" placeholder="Write a reply. Nothing is sent until you press Send, and you then have 10 seconds to undo."></textarea><button class="p" id="sd">Review and send</button>`;
+  <textarea id="rb" rows="5" placeholder="Write a reply. Nothing is sent until you press Send, and you then have 10 seconds to undo.">${esc(replyStore.draft(id))}</textarea><button class="p" id="sd" ${replyStore.isPending(id) ? "disabled" : ""}>Review and send</button>`;
+  $("#rb").oninput = event => replyStore.setDraft(id, event.target.value);
   $("#th").onclick = () => handle([id]);
   $("#sn").onclick = async () => { await invoke("snooze", { threadId: id, hours: 18 }); say("Snoozed until tomorrow."); selected = null; inbox(); };
   $("#vp").onclick = async () => say((await invoke("toggle_vip", { address: last.from_address })) ? "VIP: their mail rises to the top." : "No longer a VIP.");
   $("#ar").onclick = async () => { try { await invoke("archive", { threadId: id }); say("Archived."); selected = null; inbox(); } catch (e) { fail(e); } };
   $("#tr").onclick = async () => { if (!confirm("Move this conversation to Trash?")) return; try { await invoke("trash", { threadId: id }); say("Moved to Trash."); selected = null; inbox(); } catch (e) { fail(e); } };
   $("#sd").onclick = () => {
-    const body = $("#rb").value.trim(); if (!body) return; let cancelled = false; $("#rb").value = "";
-    say("Sending your reply in 10 seconds.", () => { cancelled = true; $("#rb").value = body; say("Not sent. Your draft is back."); }, 10);
-    setTimeout(async () => { if (cancelled) return; try { await invoke("send_reply", { threadId: id, body }); say("Reply sent."); } catch (e) { $("#rb").value = body; fail(e); } }, 10000);
+    replyStore.setDraft(id, $("#rb").value);
+    const undo = replyStore.queue(id); if (!undo) return;
+    say("Sending your reply in 10 seconds.", () => { if (undo()) say("Not sent. Your draft is back."); }, 10);
   };
 }
 
