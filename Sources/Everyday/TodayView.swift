@@ -242,6 +242,7 @@ struct TodayView: View {
                         }.frame(maxWidth: .infinity)
                     }
                 }
+                Link("Weather data by Open-Meteo.com", destination: URL(string: "https://open-meteo.com")!).font(.ui(11.5)).foregroundStyle(Palette.text3)   // CC BY 4.0 attribution
             } else {
                 Text("Weather for \(model.weather.city) will appear after the first refresh.").font(.ui(14.5)).foregroundStyle(Palette.text2)
             }

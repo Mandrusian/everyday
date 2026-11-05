@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Licences | everyday.</title>
+<meta name="description" content="The licence for everyday. and the open-source software and data it uses.">
+<meta name="theme-color" content="#f1ebdd">
+<meta name="color-scheme" content="light dark">
+<script>(function(){var d=document.documentElement,t=null;try{t=localStorage.getItem('theme')}catch(e){}if(t==='light'||t==='dark')d.dataset.theme=t;d.dataset.mode=t||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light')})()</script>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<main class="doc">
+  <div class="bg" aria-hidden="true"></div>
+  <div class="wrap">
+    <div class="top">
+      <a class="back" href="index.html" aria-label="everyday. home">everyday<b>.</b></a>
+      <button class="theme" type="button" aria-label="Switch theme"><svg viewBox="0 0 24 24" aria-hidden="true"><mask id="moon"><rect width="24" height="24" fill="#fff"/><circle class="cut" cx="25" cy="3" r="7" fill="#000"/></mask><circle cx="12" cy="12" r="5.5" fill="currentColor" mask="url(#moon)"/><path class="rays" d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+    </div>
+    <nav class="legal-nav" aria-label="Legal">
+      <a href="privacy.html">Privacy policy</a>
+      <a href="terms.html">Terms of use</a>
+      <a href="licenses.html" aria-current="page">Licences</a>
+    </nav>
+    <h1>Licences</h1>
+    <p class="meta">Last updated 5 November 2026</p>
+
+    <h2>everyday.</h2>
+    <p>Copyright © 2026 Mandrusian. everyday. is free software: you can redistribute it and/or modify it under the terms of the <a href="https://github.com/Mandrusian/everyday/blob/main/LICENSE">GNU General Public License version 3</a>. It is distributed in the hope that it will be useful, but without any warranty; see the licence for details. The complete source code is at <a href="https://github.com/Mandrusian/everyday">github.com/Mandrusian/everyday</a>.</p>
+
+    <h2>Data</h2>
+    <table>
+      <tr><th>Source</th><th>Use</th><th>Licence</th></tr>
+      <tr><td><a href="https://open-meteo.com">Open-Meteo</a></td><td>Weather forecasts and city lookup</td><td>Weather data by Open-Meteo.com, under <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a></td></tr>
+      <tr><td>News publishers</td><td>Headlines, short summaries and links from feeds you follow</td><td>Owned by each publisher; the app always links the original</td></tr>
+    </table>
+
+    <h2>Mac app</h2>
+    <p>The Mac app is built only on Apple's system frameworks (SwiftUI, AppKit, Network, Security, EventKit, AVFoundation and others) and uses no third-party code packages. SQLite is provided by macOS and is in the public domain.</p>
+
+    <h2>Windows app</h2>
+    <table>
+      <tr><th>Component</th><th>Licence</th></tr>
+      <tr><td>Tauri</td><td>MIT or Apache-2.0</td></tr>
+      <tr><td>SQLite (bundled through rusqlite)</td><td>Public domain; rusqlite is MIT</td></tr>
+      <tr><td>mail-parser</td><td>Apache-2.0 or MIT</td></tr>
+      <tr><td>feed-rs</td><td>MIT</td></tr>
+      <tr><td>ureq, native-tls, keyring, regex, serde, serde_json, chrono, url, base64, once_cell</td><td>MIT or Apache-2.0</td></tr>
+      <tr><td>Microsoft Edge WebView2 Runtime</td><td>Provided by Windows under Microsoft's terms</td></tr>
+    </table>
+    <p>Each crate's full licence text ships with its source; <code>cargo about</code> or <code>cargo license</code> in the <code>windows/</code> folder lists every dependency, including indirect ones.</p>
+
+    <h2>Website</h2>
+    <p>The site uses no third-party scripts, fonts or images. Text is set in your system's own typefaces.</p>
+
+    <h2>Trade marks</h2>
+    <p>Gmail and Google are trade marks of Google LLC. Mac and macOS are trade marks of Apple Inc. Windows is a trade mark of Microsoft Corporation. Claude is a trade mark of Anthropic. Other names belong to their owners. Their mention here doesn't imply endorsement.</p>
+
+    <p class="foot-note">Questions about this page? Open an issue at <a href="https://github.com/Mandrusian/everyday/issues">github.com/Mandrusian/everyday/issues</a>. Issues are public, so don't include personal details there.</p>
+  </div>
+</main>
+<script src="js/theme.js"></script>
+</body>
+</html>

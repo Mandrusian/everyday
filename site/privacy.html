@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Privacy | everyday.</title>
+<title>Privacy policy | everyday.</title>
+<meta name="description" content="What everyday. stores, what it sends and to whom. Short version: your data stays on your device.">
 <meta name="theme-color" content="#f1ebdd">
 <meta name="color-scheme" content="light dark">
 <script>(function(){var d=document.documentElement,t=null;try{t=localStorage.getItem('theme')}catch(e){}if(t==='light'||t==='dark')d.dataset.theme=t;d.dataset.mode=t||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light')})()</script>
@@ -17,43 +18,73 @@
       <a class="back" href="index.html" aria-label="everyday. home">everyday<b>.</b></a>
       <button class="theme" type="button" aria-label="Switch theme"><svg viewBox="0 0 24 24" aria-hidden="true"><mask id="moon"><rect width="24" height="24" fill="#fff"/><circle class="cut" cx="25" cy="3" r="7" fill="#000"/></mask><circle cx="12" cy="12" r="5.5" fill="currentColor" mask="url(#moon)"/><path class="rays" d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
     </div>
-    <h1>Privacy</h1>
-    <p class="note">Draft. Have this checked before launch.</p>
+    <nav class="legal-nav" aria-label="Legal">
+      <a href="privacy.html" aria-current="page">Privacy policy</a>
+      <a href="terms.html">Terms of use</a>
+      <a href="licenses.html">Licences</a>
+    </nav>
+    <h1>Privacy policy</h1>
+    <p class="meta">Last updated 5 November 2026</p>
 
-    <h2>What everyday. is</h2>
-    <p>A Mac app that runs entirely on your computer. There is no everyday. account and no everyday. server. The authors receive no data from the app.</p>
+    <div class="summary">
+      <p><strong>The short version.</strong> everyday. has no servers and no accounts. Your mail, tasks, news and everything the app learns stay in a database on your device. The app only talks to services you choose: your mail provider, news publishers, the weather service, and an AI provider if you add your own key. We never receive your data.</p>
+    </div>
 
-    <h2>Stored on your Mac</h2>
-    <p>Your mail, tasks, news, preferences and what the app has learned are in a local database in <code>~/Library/Application Support/everyday</code>. Mail passwords and AI keys are stored in the macOS Keychain. You can delete everything from Settings → Privacy.</p>
+    <h2>Who this covers</h2>
+    <p>This policy covers the everyday. app for Mac and Windows (“the app”) and the website at everyday.mandrusia.tech (“the site”). everyday. is a free, open-source project maintained by Mandrusian (“we”, “us”). The source code is public at <a href="https://github.com/Mandrusian/everyday">github.com/Mandrusian/everyday</a>, so you can check everything described here.</p>
 
-    <h2>Sent from your Mac to others</h2>
-    <ul>
-      <li><strong>Your mail provider</strong>, to read, and (only when you approve) to send, archive or delete mail.</li>
-      <li><strong>News publishers</strong>, when the app fetches their feeds and articles.</li>
-      <li><strong>Open-Meteo</strong>, your city name and its coordinates, for the weather.</li>
-      <li><strong>everyday.mandrusia.tech</strong>, once a day, to read a small public file that says whether a newer version exists. Nothing about you is sent, and you can turn it off in Settings → General.</li>
-      <li><strong>The AI provider you choose</strong>, only if you add a key. Settings → AI provider → activity log shows every request and the exact text sent. You can limit this to subject lines and snippets.</li>
-    </ul>
+    <h2>What the app stores on your device</h2>
+    <table>
+      <tr><th>What</th><th>Where</th></tr>
+      <tr><td>Mail you sync (inbox messages from the last 7 to 90 days, your choice), summaries, labels and reply drafts</td><td>A local database in <code>~/Library/Application Support/everyday</code> on Mac, or your user profile on Windows</td></tr>
+      <tr><td>Tasks, saved stories, news sources, what you swipe and read, and the interests learned from it</td><td>The same local database</td></tr>
+      <tr><td>Mail passwords, Google sign-in tokens and AI keys</td><td>The macOS Keychain or Windows Credential Manager</td></tr>
+      <tr><td>Spoken audio for “Listen”, if you use a natural voice</td><td>A cache folder on your device, which you can clear in Settings → Voice</td></tr>
+      <tr><td>A log of every AI request: when, which model, which feature, the text sent and the tokens used</td><td>The local database, shown in Settings → AI provider</td></tr>
+    </table>
+    <p>You can delete all of it from Settings → Privacy, or by removing the app's folder. Removing a mail account in Settings → Accounts can also delete that account's stored mail.</p>
 
-    <h2>Not collected</h2>
-    <p>No analytics, advertising, tracking or crash reporting is built in.</p>
+    <h2>What leaves your device, and to whom</h2>
+    <table>
+      <tr><th>Recipient</th><th>What is sent</th><th>When</th></tr>
+      <tr><td>Your mail provider (for example Gmail, iCloud, Fastmail)</td><td>Your sign-in, and requests to read mail. Sending, archiving, moving to trash and marking read happen only when you press the button for it.</td><td>When mail syncs, and when you act</td></tr>
+      <tr><td>News publishers you follow</td><td>Ordinary requests for their RSS or Atom feeds and articles, like a web browser makes</td><td>When news refreshes, or when you open a story</td></tr>
+      <tr><td>Open-Meteo (weather)</td><td>The city you entered and its coordinates</td><td>When the weather refreshes</td></tr>
+      <tr><td>The AI provider you choose (Google Gemini, Anthropic Claude, OpenAI, or a local model)</td><td>The text needed for the feature you're using, for example an email to summarise or the material for your briefing. You can limit mail to subject lines and snippets in Settings → AI provider. Signatures and quoted replies are removed first.</td><td>Only if you add a key, and only for the features that need it</td></tr>
+      <tr><td>everyday.mandrusia.tech</td><td>A request for a small public file that says whether a newer version exists. Nothing about you is included.</td><td>Once a day. You can turn this off in Settings → General.</td></tr>
+    </table>
+    <p>Each of these services handles what it receives under its own privacy policy. Requests go directly from your device to them; nothing passes through us.</p>
 
-    <h2>Contact</h2>
-    <p>Open an issue at <a href="https://github.com/Mandrusian/everyday/issues">github.com/Mandrusian/everyday/issues</a>.</p>
+    <h3>Google user data (Gmail)</h3>
+    <p>If you connect Gmail with Google sign-in, the app uses the Gmail API to read, label and archive your mail and to send replies you approve. Data received from Google is used only to show you your mail and provide the app's features on your device. It is not sent to us, not sold, not used for advertising, and not used to train any AI model. If you've added an AI key, the text of messages you choose to summarise or reply to is sent to that AI provider on your behalf, as described above. everyday.'s use of information received from Google APIs adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use requirements. You can revoke access at any time at <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.</p>
+
+    <h3>AI providers</h3>
+    <p>You bring your own key, so your agreement is with that provider, and their terms decide how they keep or use what you send. Some providers keep inputs for a period, and some free tiers may use them to improve their services. Check your provider's terms, or use a local model if you'd rather nothing left your device.</p>
+
+    <h2>What we don't do</h2>
+    <p>There is no analytics, advertising, tracking, fingerprinting or crash reporting in the app or on the site. We don't sell or share personal information, because we never receive it.</p>
+
+    <h2>The website</h2>
+    <p>The site is static and hosted on GitHub Pages. It loads no third-party scripts or fonts and sets no cookies. Your light or dark choice is saved in your own browser's local storage. Like any web host, GitHub may record technical information such as your IP address when you visit; see the <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">GitHub privacy statement</a>. Downloads are served from GitHub Releases on the same terms.</p>
+
+    <h2>Getting help</h2>
+    <p>Support happens through GitHub issues, which are public. Don't post email contents, passwords, keys or other personal details there. If you need to report a security problem, use GitHub's private vulnerability reporting on the repository instead.</p>
+
+    <h2>Security</h2>
+    <p>Passwords and keys are kept in the operating system's secure store, never in plain files. Mail is fetched over encrypted connections. Text from emails and web pages is treated as untrusted, and the AI can't send, archive or delete anything: only your button presses can.</p>
+
+    <h2>Children</h2>
+    <p>everyday. is not directed at children under 16 and we don't knowingly receive data from anyone, including children.</p>
+
+    <h2>Your rights</h2>
+    <p>Because your information stays on your device and with the services you chose, you control it directly: you can see, export or delete it in the app, and contact your mail or AI provider for what they hold. If you're in Australia, you can also contact the <a href="https://www.oaic.gov.au">Office of the Australian Information Commissioner</a>. If you're in the EU or UK, you can contact your local data protection authority.</p>
+
+    <h2>Changes</h2>
+    <p>If this policy changes, the new version will be posted here with a new date, and the change will be visible in the repository's history.</p>
+
+    <p class="foot-note">Questions about this page? Open an issue at <a href="https://github.com/Mandrusian/everyday/issues">github.com/Mandrusian/everyday/issues</a>. Issues are public, so don't include personal details there.</p>
   </div>
 </main>
-<script>
-(function () {
-  var d = document.documentElement, q = matchMedia('(prefers-color-scheme: dark)'), b = document.querySelector('.theme');
-  function sync() { d.dataset.mode = d.dataset.theme || (q.matches ? 'dark' : 'light'); b.setAttribute('aria-label', d.dataset.mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'); }
-  b.addEventListener('click', function () {
-    var next = d.dataset.mode === 'dark' ? 'light' : 'dark', sys = q.matches ? 'dark' : 'light';
-    if (next === sys) delete d.dataset.theme; else d.dataset.theme = next;
-    try { next === sys ? localStorage.removeItem('theme') : localStorage.setItem('theme', next); } catch (e) {}
-    sync();
-  });
-  q.addEventListener && q.addEventListener('change', sync); sync();
-})();
-</script>
+<script src="js/theme.js"></script>
 </body>
 </html>

@@ -410,3 +410,23 @@ h2 { font-size: clamp(34px, 4.4vw, 58px); line-height: 1.04; letter-spacing: -.0
 .doc li { margin: 10px 0; }
 .doc li strong { color: var(--ink); font-weight: 600; }
 .doc code { font: 14px var(--mono); background: var(--chip); padding: 1px 5px; border-radius: 5px; }
+
+/* Legal pages: a small table of the documents and readable long-form text */
+.doc .legal-nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 56px; font-size: 14px; }
+.doc .legal-nav a { color: var(--ink-2); text-decoration: none; padding-bottom: 2px; border-bottom: 1px solid transparent; }
+.doc .legal-nav a:hover { color: var(--ink); }
+.doc .legal-nav a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--clay); }
+.doc h1 { margin-top: 28px; }
+.doc .meta { margin-top: 14px; font-size: 14px; color: var(--ink-3); }
+.doc .summary { margin-top: 28px; padding: 20px 22px; border-radius: 12px; background: var(--chip); }
+.doc .summary p { color: var(--ink); }
+.doc .summary p + p { margin-top: 8px; }
+.doc h3 { margin-top: 26px; font-size: 18px; letter-spacing: -.01em; }
+.doc a { color: var(--clay-text); }
+.doc p + p { margin-top: 12px; }
+.doc table { width: 100%; margin-top: 14px; border-collapse: collapse; font-size: 14.5px; }
+.doc th, .doc td { text-align: left; vertical-align: top; padding: 10px 12px 10px 0; border-bottom: 1px solid var(--rule); color: var(--ink-2); }
+.doc th { color: var(--ink); font-weight: 600; }
+.doc .caps { font-weight: 600; color: var(--ink); }
+.doc .foot-note { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--rule); font-size: 14px; color: var(--ink-3); }
+.doc a.back { color: var(--ink); }
