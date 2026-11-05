@@ -12,6 +12,15 @@ public struct WidgetSnapshot: Codable, Sendable {
     public struct Task: Codable, Sendable { public var title: String; public var due: Date?; public init(title: String, due: Date?) { self.title = title; self.due = due } }
     public struct Quote: Codable, Sendable { public var text: String; public var author: String; public var topic: String; public init(text: String, author: String, topic: String) { self.text = text; self.author = author; self.topic = topic } }
 
+    public struct Countdown: Codable, Sendable, Hashable { public var title: String; public var date: Date; public init(title: String, date: Date) { self.title = title; self.date = date } }
+    /// A widget the reader put together: a name, a look and up to four blocks in order.
+    public struct Custom: Codable, Sendable, Hashable {
+        public var name: String; public var style: String; public var blocks: [String]
+        public init(name: String, style: String, blocks: [String]) { self.name = name; self.style = style; self.blocks = blocks }
+        /// Blocks a custom widget can use, with their names in the app.
+        public static let blocks: [(id: String, name: String)] = [("clock", "Clock"), ("weather", "Weather"), ("next", "Next event"), ("brief", "Brief"), ("needs", "Needs you"), ("news", "Top story"), ("tasks", "Tasks"), ("focus", "Focus"), ("countdown", "Countdown"), ("quote", "Quote")]
+    }
+
     public var updated = Date()
     public var name = ""
     public var weather: Weather?
@@ -22,6 +31,13 @@ public struct WidgetSnapshot: Codable, Sendable {
     public var stories: [Story] = []
     public var tasks: [Task] = []
     public var quote: Quote?
+    /// "flat" or "glass", chosen in Settings → Widgets.
+    public var style = "flat"
+    /// Days of the current month (1–31) that have an event, for the month calendar.
+    public var eventDays: [Int] = []
+    public var countdowns: [Countdown] = []
+    /// Widgets the reader builds in Settings → Widgets; shown by the Custom 1–3 widgets.
+    public var customs: [Custom] = []
     public init() {}
 
     public static var fileURL: URL {

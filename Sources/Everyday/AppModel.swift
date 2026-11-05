@@ -167,9 +167,23 @@ final class AppModel {
             s.stories = stories.prefix(6).map { .init(title: $0.lead.title, source: $0.lead.source) }
             s.tasks = openTasks.prefix(6).map { .init(title: $0.title, due: $0.due) }
             s.quote = (try? db.get("quote", id: Self.quoteKey(prefs)) as WidgetSnapshot.Quote?) ?? nil
+            s.style = prefs.string(Prefs.Key.widgetStyle, default: "flat")
+            let cal = Calendar.current, now = Date()
+            s.eventDays = Array(Set(events.filter { cal.isDate($0.start, equalTo: now, toGranularity: .month) }.map { cal.component(.day, from: $0.start) })).sorted()
+            s.countdowns = widgetCountdowns.filter { $0.date > now.addingTimeInterval(-86400) }.sorted { $0.date < $1.date }
+            s.customs = widgetCustoms
             try? s.write()
             WidgetCenter.shared.reloadAllTimelines()
         }
+    }
+
+    var widgetCountdowns: [WidgetSnapshot.Countdown] {
+        get { (try? JSONDecoder().decode([WidgetSnapshot.Countdown].self, from: Data(prefs.string(Prefs.Key.countdowns, default: "[]").utf8))) ?? [] }
+        set { if let d = try? JSONEncoder().encode(newValue) { prefs.set(String(decoding: d, as: UTF8.self), Prefs.Key.countdowns) }; updateWidgets() }
+    }
+    var widgetCustoms: [WidgetSnapshot.Custom] {
+        get { (try? JSONDecoder().decode([WidgetSnapshot.Custom].self, from: Data(prefs.string(Prefs.Key.customWidgets, default: "[]").utf8))) ?? [] }
+        set { if let d = try? JSONEncoder().encode(Array(newValue.prefix(3))) { prefs.set(String(decoding: d, as: UTF8.self), Prefs.Key.customWidgets) }; updateWidgets() }
     }
 
     static func quoteKey(_ prefs: Prefs) -> String { BriefingSchedule.dayKey(Date()) + "|" + prefs.string(Prefs.Key.quoteTopic, default: "Stoicism").lowercased() }

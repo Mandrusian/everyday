@@ -292,11 +292,51 @@ struct VoicePane: View {
 struct WidgetsPane: View {
     @Environment(AppModel.self) private var model
     @Local private var topic = Prefs.shared.string(Prefs.Key.quoteTopic, default: "Stoicism")
+    @Local private var style = Prefs.shared.string(Prefs.Key.widgetStyle, default: "flat")
     @Local private var busy = false
+    @Local private var newTitle = ""
+    @Local private var newDate = Date().addingTimeInterval(86400 * 7)
+    @Local private var customs: [WidgetSnapshot.Custom] = []
+    @Local private var loaded = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("everyday. has widgets for your desktop and Notification Centre: Clock, Weather, Up next, Brief, Quote of the day, Needs you, Top news and Tasks. They use the same warm paper as the app and follow light and dark mode.").font(.ui(15.5)).foregroundStyle(Palette.text2)
-            Text("To add one, right-click the desktop and choose Edit Widgets, then search for “everyday.”. They update whenever the app refreshes, and read only a small summary the app saves on this Mac.").font(.ui(14.5)).foregroundStyle(Palette.text3)
+            Text("To add a widget, right-click the desktop, choose Edit Widgets and search for “everyday.”. They update whenever the app refreshes and read only a small summary saved on this Mac.").font(.ui(15)).foregroundStyle(Palette.text2)
+
+            SectionLabel("Look").padding(.top, 6)
+            Picker("Widget look", selection: $style) { Text("Flat paper").tag("flat"); Text("Liquid Glass").tag("glass") }
+                .pickerStyle(.segmented).labelsHidden().frame(width: 260)
+                .onChange(of: style) { _, v in model.prefs.set(v, Prefs.Key.widgetStyle); model.updateWidgets() }
+            Text("Flat paper uses the app's colours. Liquid Glass lets the desktop show through. Custom widgets can choose their own.").font(.ui(13.5)).foregroundStyle(Palette.text3)
+
+            SectionLabel("Countdowns").padding(.top, 6)
+            ForEach(Array(model.widgetCountdowns.enumerated()), id: \.offset) { i, c in
+                HStack {
+                    Text(c.title).font(.ui(15)).foregroundStyle(Palette.text)
+                    Text(c.date.formatted(date: .abbreviated, time: .omitted)).font(.ui(14)).foregroundStyle(Palette.text3)
+                    Spacer()
+                    Button("Remove") { var l = model.widgetCountdowns; l.remove(at: i); model.widgetCountdowns = l }.buttonStyle(QuietButtonStyle())
+                }
+            }
+            HStack(alignment: .bottom, spacing: 10) {
+                Field(title: "Counting down to", text: $newTitle, placeholder: "Holidays, a launch, a birthday…")
+                DatePicker("Date", selection: $newDate, displayedComponents: .date).labelsHidden().frame(width: 130)
+                Button("Add") {
+                    let t = newTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !t.isEmpty else { return }
+                    model.widgetCountdowns = model.widgetCountdowns + [.init(title: t, date: newDate)]
+                    newTitle = ""
+                }.buttonStyle(QuietButtonStyle()).disabled(newTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            Text("The Countdown widget shows the nearest one.").font(.ui(13.5)).foregroundStyle(Palette.text3)
+
+            SectionLabel("Build your own").padding(.top, 6)
+            Text("Pick up to six blocks for each of the Custom 1, 2 and 3 widgets. Small widgets show the first two, medium the first three.").font(.ui(14.5)).foregroundStyle(Palette.text2)
+            ForEach(customs.indices, id: \.self) { i in customEditor(i) }
+            if customs.count < 3 {
+                Button("New custom widget") { customs.append(.init(name: "Custom \(customs.count + 1)", style: style, blocks: ["clock", "weather", "next"])); saveCustoms() }.buttonStyle(QuietButtonStyle())
+            }
+
             SectionLabel("Quote of the day").padding(.top, 6)
             HStack(alignment: .bottom, spacing: 10) {
                 Field(title: "Topic", text: $topic, placeholder: "Stoicism, flying, design, Australian history…")
@@ -306,7 +346,42 @@ struct WidgetsPane: View {
             if !model.ai.isConfigured { Text("The quote needs an AI key (Settings → AI provider). The other widgets work without one.").font(.ui(14)).foregroundStyle(Palette.warnFG) }
             HStack { Button("Refresh widgets now") { model.updateWidgets() }.buttonStyle(QuietButtonStyle()); Spacer() }.padding(.top, 4)
         }
+        .onAppear { if !loaded { customs = model.widgetCustoms; loaded = true } }
     }
+
+    @ViewBuilder private func customEditor(_ i: Int) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Custom \(i + 1)").font(.ui(15.5, .semibold)).foregroundStyle(Palette.text)
+                Spacer()
+                Picker("Look for Custom \(i + 1)", selection: Binding(get: { customs[i].style }, set: { customs[i].style = $0; saveCustoms() })) { Text("Flat").tag("flat"); Text("Glass").tag("glass") }
+                    .pickerStyle(.segmented).labelsHidden().frame(width: 130)
+                Button("Remove") { customs.remove(at: i); saveCustoms() }.buttonStyle(QuietButtonStyle())
+            }
+            // The chosen blocks in order; click one to take it out.
+            HStack(spacing: 6) {
+                ForEach(Array(customs[i].blocks.enumerated()), id: \.offset) { j, b in
+                    Button { customs[i].blocks.remove(at: j); saveCustoms() } label: {
+                        Text("\(j + 1). \(Self.name(b))").font(.ui(13.5)).padding(.horizontal, 9).padding(.vertical, 4)
+                            .background(Capsule().fill(Palette.raised)).foregroundStyle(Palette.text)
+                    }.buttonStyle(.plain).help("Remove \(Self.name(b))")
+                }
+                if customs[i].blocks.isEmpty { Text("No blocks yet.").font(.ui(13.5)).foregroundStyle(Palette.text3) }
+            }
+            if customs[i].blocks.count < 6 {
+                HStack(spacing: 6) {
+                    Text("Add").font(.ui(13.5)).foregroundStyle(Palette.text3)
+                    ForEach(WidgetSnapshot.Custom.blocks.filter { !customs[i].blocks.contains($0.id) }, id: \.id) { b in
+                        Button(b.name) { customs[i].blocks.append(b.id); saveCustoms() }.buttonStyle(.plain).font(.ui(13.5)).foregroundStyle(Palette.text2)
+                    }
+                }
+            }
+        }
+        .padding(12).background(RoundedRectangle(cornerRadius: 8).stroke(Palette.text3.opacity(0.3), lineWidth: 0.5))
+    }
+
+    private static func name(_ id: String) -> String { WidgetSnapshot.Custom.blocks.first { $0.id == id }?.name ?? id }
+    private func saveCustoms() { model.widgetCustoms = customs }
     private func save() { let t = topic.trimmingCharacters(in: .whitespacesAndNewlines); model.prefs.set(t.isEmpty ? "Stoicism" : t, Prefs.Key.quoteTopic) }
 }
 
