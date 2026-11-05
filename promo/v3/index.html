@@ -1,0 +1,239 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js","three/addons/":"./vendor/addons/"}}</script>
+<style>
+:root{--beige:#e6e0d0;--paper:#fbf9f3;--ink:#141413;--dark:#141413;--raised:#24221f;--acc:#d97757;--sans:-apple-system,"SF Pro Text",system-ui,sans-serif;--serif:ui-serif,"New York",Georgia,serif}
+html,body{margin:0;background:#000;overflow:hidden}
+#v{position:relative;width:1280px;height:720px;overflow:hidden;font-family:var(--sans)}
+.sc{position:absolute;inset:0;display:none}
+.beige{background:var(--beige)}.dark{background:var(--dark)}
+canvas#gl{position:absolute;inset:0;width:1280px;height:720px;pointer-events:none;z-index:5}
+.a{position:absolute;transform:translate(-50%,-50%)}
+.cap{position:absolute;left:0;right:0;top:78px;text-align:center;font:400 46px/1.1 var(--serif);letter-spacing:-.02em;color:var(--ink)}
+.dark .cap{color:#ece8df}
+.w{display:inline-block;white-space:pre}
+.pill{border-radius:999px;display:flex;align-items:center;justify-content:center;font:600 26px var(--sans);white-space:nowrap}
+.paper{background:var(--paper);color:var(--ink)}
+.inkb{background:var(--ink);color:#f4f1e8}
+.accb{background:var(--acc);color:var(--ink)}
+.chip{display:inline-block;padding:4px 12px;border-radius:8px;font:600 15px var(--sans)}
+.row{position:absolute;left:340px;width:600px;height:76px;border-radius:18px;background:var(--paper);box-sizing:border-box;padding:0 24px;display:flex;align-items:center;justify-content:space-between;font:500 22px var(--sans);color:var(--ink)}
+.row small{display:block;font:400 16px var(--sans);color:#8a8578;margin-top:2px}
+.card{background:var(--paper);border-radius:22px;box-sizing:border-box}
+.hl-u{color:#c0603c;font-weight:600}.hl-d{color:#b9842a;font-weight:600}.hl-p{color:#3f78a8;font-weight:600}
+#fx{position:absolute;inset:0;z-index:9;pointer-events:none}
+#cur{position:absolute;z-index:10;width:34px;height:34px;pointer-events:none;filter:drop-shadow(0 2px 3px rgba(0,0,0,.25))}
+.wob{filter:url(#wob)}
+</style></head><body>
+<svg width="0" height="0" style="position:absolute"><filter id="wob"><feTurbulence type="fractalNoise" baseFrequency="0.018" numOctaves="2" seed="4"/><feDisplacementMap in="SourceGraphic" scale="7"/></filter></svg>
+<div id="v">
+<canvas id="gl" width="1920" height="1080"></canvas>
+
+<div class="sc dark" id="s0"><div id="dot" class="a" style="left:640px;top:360px;width:16px;height:16px;border-radius:50%;background:#d97757"></div></div>
+
+<div class="sc beige" id="s2">
+  <div class="cap" id="cap2"></div>
+  <svg class="a wob" id="blob1" width="470" height="330" viewBox="0 0 220 190" style="left:640px;top:410px"><path d="M120,20 C170,10 215,50 205,100 C198,150 150,185 95,172 C40,160 5,115 25,65 C38,35 80,28 120,20Z" fill="#d97757"/></svg>
+  <div class="a pill paper" id="btn1" style="left:640px;top:390px;width:380px;height:92px;"><span id="btn1t">Connect Gmail</span></div>
+  <div id="prov" class="a" style="left:640px;top:575px;display:flex;gap:12px"></div>
+</div>
+
+<div class="sc beige" id="s3">
+  <div class="cap" id="cap3"></div>
+  <div id="rows"></div>
+  <div class="a pill inkb" id="btn2" style="left:640px;top:560px;width:230px;height:60px;font-size:22px">Sort my inbox</div>
+</div>
+
+<div class="sc beige" id="s4">
+  <div class="cap" id="cap4"></div>
+  <div class="a card" style="left:640px;top:350px;width:860px;height:340px;box-shadow:none"></div>
+  <div class="a serif" id="greet" style="left:330px;top:228px;font:400 28px var(--serif);color:#6f6a5d;transform:none;top:210px"></div>
+  <div class="a" id="brief" style="left:250px;top:262px;width:780px;font:400 30px/44px var(--serif);color:#2a2926;transform:none"></div>
+  <div class="a" id="chips4" style="left:250px;top:430px;transform:none;display:flex;gap:12px"><span class="pill paper" id="c1" style="font:600 19px var(--sans);padding:0 22px;height:46px;background:#ece6d6;color:var(--ink)">That was me</span><span class="pill" id="c2" style="font:600 19px var(--sans);padding:0 22px;height:46px;background:#ece6d6;color:#8a8578">Not me</span></div>
+  <div class="a pill inkb" id="btn3" style="left:640px;top:600px;width:310px;height:64px;font-size:23px">Write my briefing</div>
+</div>
+
+<div class="sc beige" id="s5">
+  <div class="cap" id="cap5"></div>
+  <div class="a" id="newsw" style="left:640px;top:370px;width:440px;height:310px"></div>
+  <div class="a pill paper" id="heart" style="left:640px;top:610px;width:78px;height:78px"><svg width="34" height="34" viewBox="0 0 24 24"><path d="M12 21s-8-5.2-8-11a4.6 4.6 0 0 1 8-3 4.6 4.6 0 0 1 8 3c0 5.8-8 11-8 11z" fill="#d97757"/></svg></div>
+  <div class="a serif" id="caught" style="left:640px;top:370px;font:italic 400 34px var(--serif);color:#8a8578;opacity:0">You’re caught up.</div>
+</div>
+
+<div class="sc beige" id="s6">
+  <div class="cap" id="cap6"></div>
+  <div class="a pill paper" id="inp" style="left:640px;top:300px;width:660px;height:78px;justify-content:flex-start;padding:0 26px;box-sizing:border-box;font:500 25px var(--sans)"><span id="tq" style="color:var(--ink)"></span><span id="ph" style="color:#a39e92">Add a task…</span><span id="caret" style="width:2px;height:28px;background:#d97757;margin-left:2px"></span></div>
+  <div class="a pill accb" id="addb" style="left:905px;top:300px;width:96px;height:52px;font-size:20px">Add</div>
+  <div class="a paper" id="t1" style="left:640px;top:420px;width:600px;height:88px;border-radius:20px;box-sizing:border-box;padding:16px 26px;font:600 24px var(--sans)">Pay rent<div style="margin-top:8px"><span class="chip" style="background:#f6e3d9;color:#c0603c" id="t1a">Fri 5pm</span> <span class="chip" style="background:#f3dede;color:#b4483f" id="t1b">High</span></div></div>
+  <div class="a paper" id="t2" style="left:640px;top:530px;width:600px;height:88px;border-radius:20px;box-sizing:border-box;padding:16px 26px;font:600 24px var(--sans)"><span id="t2t">Reply to Dana</span><div style="margin-top:8px"><span class="chip" style="background:#e3e8ee;color:#4d6a85">Suggested from mail</span></div>
+    <div class="a pill" id="ok" style="left:540px;top:44px;width:54px;height:54px;border:3px solid #141413;box-sizing:border-box"><svg id="okv" width="26" height="26" viewBox="0 0 24 24" style="opacity:0"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#141413" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div></div>
+</div>
+
+<div class="sc dark" id="s7">
+  <div class="cap" id="cap7"></div>
+  <div class="a pill" id="keyf" style="left:640px;top:310px;width:600px;height:80px;background:var(--raised);color:#a39e92;justify-content:flex-start;padding:0 28px;box-sizing:border-box;font:500 22px var(--sans)"><span style="color:#8c887d;margin-right:18px">Gemini key</span><span id="dots" style="color:#ece8df;letter-spacing:5px;font-size:26px"></span></div>
+  <div class="a pill accb" id="btn4" style="left:640px;top:440px;width:330px;height:64px;font-size:22px">Save to Keychain</div>
+  <svg class="a" id="lock" width="72" height="72" viewBox="0 0 24 24" style="left:640px;top:566px;opacity:0"><rect x="5" y="11" width="14" height="10" rx="2.5" fill="#d97757"/><path id="shackle" d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="#ece8df" stroke-width="2" stroke-linecap="round"/></svg>
+  <div class="a" id="saved" style="left:640px;top:630px;font:500 22px var(--sans);color:#a39e92;opacity:0">Stored in your Keychain. Never leaves this Mac.</div>
+</div>
+
+<div class="sc beige" id="s8">
+  <div class="a serif" id="m1" style="left:640px;top:200px;font:400 128px var(--serif);letter-spacing:-.03em;color:var(--ink)">Mail<span style="color:#d97757">.</span></div>
+  <div class="a serif" id="m2" style="left:640px;top:360px;font:400 128px var(--serif);letter-spacing:-.03em;color:var(--ink)">News<span style="color:#d97757">.</span></div>
+  <div class="a serif" id="m3" style="left:640px;top:520px;font:400 128px var(--serif);letter-spacing:-.03em;color:var(--ink)">Tasks<span style="color:#d97757">.</span></div>
+</div>
+
+<div class="sc beige" id="s9">
+  <svg class="a wob" id="blob2" width="760" height="600" viewBox="0 0 220 190" style="left:640px;top:360px;opacity:.0"><path d="M120,20 C170,10 215,50 205,100 C198,150 150,185 95,172 C40,160 5,115 25,65 C38,35 80,28 120,20Z" fill="#d97757"/></svg>
+  <div class="a serif" id="t9" style="left:800px;top:330px;font:450 104px var(--serif);letter-spacing:-.03em;color:var(--ink);white-space:nowrap">everyday<span style="color:#d97757">.</span></div>
+  <div class="a pill accb" id="btn5" style="left:800px;top:470px;width:380px;height:70px;font-size:26px">Get everyday. · A$1</div>
+  <div class="a" id="u9" style="left:800px;top:545px;font:500 20px var(--sans);color:#6f6a5d">or build it free from source</div>
+</div>
+
+<svg id="fx" width="1280" height="720"></svg>
+<svg id="cur" viewBox="0 0 24 24"><path d="M3.5 2.5l7.6 19 2.8-7.8 7.6-2.9z" fill="#fff" stroke="#141413" stroke-width="1.7" stroke-linejoin="round"/></svg>
+</div>
+<script type="module">
+import * as THREE from './vendor/three.module.min.js';
+import {GLTFLoader} from './vendor/addons/loaders/GLTFLoader.js';
+import {RoomEnvironment} from './vendor/addons/environments/RoomEnvironment.js';
+const TL=await (await fetch('timeline.json')).json();
+const S=TL.scenes, END=TL.end, CK=TL.clicks;
+const clamp=(x,a=0,b=1)=>Math.min(b,Math.max(a,x)),ease=x=>1-Math.pow(1-clamp(x),3),eio=x=>{x=clamp(x);return x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2};
+const prog=(t,a,d)=>clamp((t-a)/d),$=id=>document.getElementById(id),lerp=(a,b,k)=>a+(b-a)*k;
+const back=x=>{x=clamp(x);const c=1.9;return 1+(c+1)*Math.pow(x-1,3)+c*Math.pow(x-1,2)}; // overshoot pop
+
+/* 3D icon */
+const cv=$('gl');const R=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true});R.setPixelRatio(1);R.setSize(1920,1080,false);
+R.toneMapping=THREE.ACESFilmicToneMapping;R.toneMappingExposure=1.05;R.outputColorSpace=THREE.SRGBColorSpace;
+const sc=new THREE.Scene();sc.environment=new THREE.PMREMGenerator(R).fromScene(new RoomEnvironment(),.04).texture;sc.environmentIntensity=.85;
+const k=new THREE.DirectionalLight(0xffe3cf,2.2);k.position.set(3,4,5);sc.add(k);const rm=new THREE.DirectionalLight(0xd97757,1.4);rm.position.set(-4,-1,-3);sc.add(rm);
+const cam=new THREE.PerspectiveCamera(30,16/9,.1,50);cam.position.set(0,0,8);
+const icon=new THREE.Group();sc.add(icon);
+await new Promise(r=>new GLTFLoader().load('everyday-3d-icon.glb',g=>{const m=g.scene,b=new THREE.Box3().setFromObject(m),s=b.getSize(new THREE.Vector3()),c=b.getCenter(new THREE.Vector3());m.position.sub(c);m.scale.setScalar(2.1/Math.max(s.x,s.y));icon.add(m);r();}));
+const hH=Math.tan(THREE.MathUtils.degToRad(15))*8,hW=hH*16/9;
+function setIcon(v,x,y,s,ry,rx){cv.style.opacity=v?1:0;if(!v)return;icon.position.set((x-640)/640*hW,-(y-360)/360*hH,0);icon.scale.setScalar(s);icon.rotation.set(rx,ry,0);R.render(sc,cam);}
+
+/* helpers */
+function split(el,html){el.innerHTML=html.split(' ').map(w=>`<span class="w">${w} </span>`).join('');return [...el.children];}
+function rev(ws,t,t0,step=.11,d=.5){ws.forEach((w,i)=>{const p=ease(prog(t,t0+i*step,d));w.style.opacity=p;w.style.transform=`translateY(${(1-p)*18}px)`;w.style.filter=`blur(${(1-p)*8}px)`;});}
+const caps={2:split($('cap2'),'Connect your mail.'),3:split($('cap3'),'Your inbox sorts itself.'),4:split($('cap4'),'A briefing, written for you.'),5:split($('cap5'),'News, swiped.'),6:split($('cap6'),'Tasks, just typed.'),7:split($('cap7'),'Your key. Your Mac.')};
+const pressed=(t,tc,d=.13)=>t>=tc&&t<tc+d;
+const press=(el,t,tc,base='')=>{el.style.transform=`translate(-50%,-50%) scale(${pressed(t,tc)?.95:1}) ${base}`;};
+
+/* cursor path: [t,x,y] */
+const CP=[[3.7,1180,720],[5.5,646,392],[5.76,640,388],[7.4,640,388],[7.9,860,520],
+ [8.4,900,640],[9.6,650,562],[9.74,646,558],[11.6,700,600],[12.05,642,592],[12.12,640,590],[15.4,900,600],[16.22,350,455],[16.3,347,452],[17.8,347,452],[19.0,640,560],
+ [19.6,640,440],[19.95,640,420],[20.21,900,380],[20.45,980,360],[21.3,650,606],[21.4,640,604],[22.6,640,604],[23.4,640,430],[23.5,640,420],[23.67,420,400],[23.9,360,390],[24.3,640,320],[24.5,640,300],
+ [25.0,720,340],[25.95,903,304],[26.04,900,302],[27.0,900,420],[28.2,940,480],[29.2,912,532],[29.27,910,530],[30.4,980,420],[30.93,980,420],
+ [31.2,640,330],[31.45,640,312],[32.4,820,420],[33.3,700,480],[33.65,642,444],[33.72,640,442],[35.0,640,600],
+ [38.45,1180,700],[39.2,800,480],[39.29,798,474],[40.4,860,560]];
+const vis=t=>(t>=3.7&&t<35.3)||(t>=38.45&&t<=END);
+function cpos(t){if(t<=CP[0][0])return CP[0];for(let i=0;i<CP.length-1;i++){const a=CP[i],b=CP[i+1];if(t>=a[0]&&t<b[0]){const e=eio((t-a[0])/(b[0]-a[0]));return[t,lerp(a[1],b[1],e),lerp(a[2],b[2],e)];}}return CP[CP.length-1];}
+
+/* scene 3 rows */
+const rowsEl=$('rows');
+const mail=[{f:'Greenfield Property',s:'Lease renewal. Sign by Friday',c:['Deadline','#f3dede','#b4483f'],from:0,to:1,dim:0},
+ {f:'Morning Brew',s:'Your weekday briefing',c:['Newsletter','#e3e8ee','#4d6a85'],from:1,to:2,dim:1},
+ {f:'Dana Reyes',s:'Thursday roadmap sync',c:['Needs reply','#f6e3d9','#c0603c'],from:2,to:0,dim:0}];
+mail.forEach(r=>{const d=document.createElement('div');d.className='row';d.innerHTML=`<div>${r.f}<small>${r.s}</small></div><span class="chip" style="opacity:0;background:${r.c[1]};color:${r.c[2]}">${r.c[0]}</span>`;rowsEl.appendChild(d);r.el=d;r.ch=d.querySelector('.chip');});
+/* providers */
+const prov=$('prov');['iCloud','Fastmail','Yahoo'].forEach(n=>{const s=document.createElement('span');s.className='pill paper';s.style.cssText='font:600 19px var(--sans);padding:0 22px;height:44px;opacity:0';s.textContent=n;prov.appendChild(s);});
+const provs=[...prov.children];
+/* briefing */
+$('greet').textContent='Good morning, Alex.';
+const L=[[['Lease renewal is due ',''],['Friday','hl-d'],['. Sign it before 5pm.','']],[['Dana','hl-p'],[' needs a reply on the ',''],['roadmap sync','hl-u'],['.','']],[['Three Google sign-in alerts arrived overnight.','']]];
+const brief=$('brief');brief.innerHTML='<div style="overflow:hidden"></div><div style="overflow:hidden"></div><div style="overflow:hidden"></div>';const bl=[...brief.children];
+const tot=L.flat().reduce((a,s)=>a+s[0].length,0);
+/* news */
+const nw=$('newsw');const NC=[['Tech','#e3e8ee','#4d6a85','Open-source models close the gap on the big labs'],['Science','#e4ecdf','#4f7a52','A quiet record year for home solar in Australia'],['Nature','#e9e4d3','#8a6d2f','Why the reef bounced back this summer']];
+NC.forEach((c,i)=>{const d=document.createElement('div');d.className='card';d.style.cssText='position:absolute;inset:0;padding:30px';d.innerHTML=`<span class="chip" style="background:${c[1]};color:${c[2]}">${c[0]}</span><div style="font:400 36px/1.15 var(--serif);margin-top:16px;color:#141413">${c[3]}</div><div style="margin-top:18px;font:17px/1.5 var(--sans);color:#8a8578">Why it matters, in one line.</div>`;nw.appendChild(d);});
+const nc=[...nw.children];
+
+const fx=$('fx'),cur=$('cur');
+function bursts(t){let h='';CK.forEach(tc=>{const p=(t-tc)/.42;if(p<0||p>1)return;const q=cpos(tc),e=ease(p);for(let i=0;i<8;i++){const a=i*Math.PI/4+.2,r1=18+e*14,r2=30+e*26;h+=`<line x1="${q[1]+Math.cos(a)*r1}" y1="${q[2]+Math.sin(a)*r1}" x2="${q[1]+Math.cos(a)*r2}" y2="${q[2]+Math.sin(a)*r2}" stroke="${(tc>31&&tc<35)?'#ece8df':'#141413'}" stroke-width="3" stroke-linecap="round" opacity="${1-p}"/>`;}});fx.innerHTML=h;}
+
+const MAP=(await (await fetch('map.json')).json()).map;
+function inv(tn){for(let i=0;i<MAP.length-1;i++){const[a,b]=MAP[i],[c,d]=MAP[i+1];if(tn>=b&&tn<=d)return a+(c-a)*(d===b?0:(tn-b)/(d-b));}return tn;}
+window.seekOld=function(t){
+  let idx=S.findIndex((c,i)=>t>=c&&(i===S.length-1||t<S[i+1]));
+  const show=i=>['s0','s0','s2','s3','s4','s5','s6','s7','s8','s9'][i];
+  document.querySelectorAll('.sc').forEach(e=>e.style.display=e.id===show(idx)?'block':'none');
+  let iconOn=false;
+  if(idx<=1){const p=ease(prog(t,0,1.7));$('dot').style.transform=`translate(-50%,-50%) scale(${1+p*1.2+(t<1.7?0.12*Math.sin(t*9):0)})`;
+    const q=ease(prog(t,1.7,.9));$('dot').style.opacity=t<1.7?1:1-q;
+    if(t>=1.7){iconOn=true;setIcon(true,640,360,.2+q*1.15,-3.4+q*3.4+Math.sin((t-2.6)*1.2)*.18*(t>2.6),.12*q);}else setIcon(false);}
+  if(idx===2){const t0=S[2];rev(caps[2],t,t0+.05);
+    const bl1=ease(prog(t,5.76,.55));$('blob1').style.transform=`translate(-50%,-50%) scale(${back(prog(t,5.76,.6))*1}) rotate(${(1-bl1)*-20}deg)`;$('blob1').style.opacity=t>=5.76?1:0;
+    const rise=ease(prog(t,t0+.1,.5));const hov=ease(prog(t,5.2,.3));
+    const b=$('btn1');b.style.opacity=rise;b.style.transform=`translate(-50%,calc(-50% + ${(1-rise)*30-hov*5}px)) scale(${pressed(t,5.76)?.95:1+hov*.03})`;
+    b.className='a pill '+(t>=5.76?'inkb':'paper');$('btn1t').textContent=t>=5.76?'Connected ✓':'Connect Gmail';
+    provs.forEach((e,i)=>{const p=back(prog(t,TL.pops[i],.35));e.style.opacity=clamp(p*2);e.style.transform=`scale(${p})`;});setIcon(false);}
+  if(idx===3){const t0=S[3];rev(caps[3],t,t0+.05);
+    mail.forEach((r,i)=>{const rise=ease(prog(t,t0+.08+i*.1,.5));const mv=eio(prog(t,11.0,.6));
+      r.el.style.top=lerp(r.from,r.from+(r.to-r.from)*mv,1)*0+ (180+(r.from+(r.to-r.from)*mv)*100)+'px';
+      r.el.style.opacity=rise*(1-mv*.5*r.dim);r.el.style.transform=`translateY(${(1-rise)*30}px)`;
+      const cp=back(prog(t,TL.pops[3+i],.35));r.ch.style.opacity=clamp(cp*2);r.ch.style.transform=`scale(${cp})`;});
+    const b=$('btn2');const hov=ease(prog(t,9.2,.3));b.style.opacity=ease(prog(t,t0+.2,.4));
+    b.style.transform=`translate(-50%,-50%) scale(${pressed(t,9.74)?.94:1+hov*.03})`;setIcon(false);}
+  if(idx===4){const t0=S[4];rev(caps[4],t,t0+.05);
+    $('greet').style.opacity=ease(prog(t,12.4,.4));
+    const n=Math.floor(clamp((t-12.5)/(15.6-12.5))*tot);let used=0;
+    L.forEach((ln,i)=>{let h='';ln.forEach(s=>{const take=clamp(n-used,0,s[0].length);used+=s[0].length;const x=s[0].slice(0,take);h+=s[1]?`<span class="${s[1]}">${x}</span>`:x;});bl[i].innerHTML=h||'&nbsp;';});
+    const btn=$('btn3');const hv=ease(prog(t,11.9,.2));const fade=1-ease(prog(t,15.3,.3));
+    btn.style.opacity=t<S[4]?0:fade;btn.textContent=t<12.12?'Write my briefing':'Writing…';btn.style.transform=`translate(-50%,-50%) scale(${pressed(t,12.12)?.94:1+hv*.03})`;
+    const cp=back(prog(t,15.7,.4));const ch=$('chips4');ch.style.opacity=clamp(cp*2);ch.style.transform=`scale(${.9+.1*cp})`;
+    const c1=$('c1');c1.style.background=t>=16.3?'#d97757':'#ece6d6';c1.style.transform=`scale(${pressed(t,16.3)?.94:1})`;
+    const col=ease(prog(t,16.45,.55));bl[2].style.height=44*(1-col)+'px';bl[2].style.opacity=1-col;bl[2].style.textDecoration=col>0?'line-through':'none';
+    ch.style.top=(430-44*col)+'px';setIcon(false);}
+  if(idx===5){const t0=S[5];rev(caps[5],t,t0+.05);
+    const a=eio(prog(t,19.95,.55)),b=eio(prog(t,21.45,.5)),c=eio(prog(t,23.5,.45));
+    nc.forEach((e,i)=>{e.style.opacity=1;e.style.transform='';});
+    // card 0: appear, then flick right at 20
+    const appear=ease(prog(t,t0,.45));
+    nc[0].style.zIndex=3;nc[0].style.opacity=(1-clamp(a*1.2))*appear;nc[0].style.transform=`translate(${a*620}px,${a*-40}px) rotate(${a*16}deg) scale(${.9+.1*appear})`;
+    if(t>=19.95&&t<20.21){const dx=eio(prog(t,19.95,.26))*260;nc[0].style.transform=`translate(${dx}px,0) rotate(${dx/22}deg)`;nc[0].style.opacity=1;}
+    // card 1: under, then hearted (flies up)
+    const in1=ease(prog(t,20.3,.4));nc[1].style.zIndex=2;nc[1].style.opacity=t<20.3?0:(1-clamp(b*1.3));nc[1].style.transform=`translateY(${(1-in1)*20+b*-150}px) scale(${.94+.06*in1+b*.08}) rotate(${b*-4}deg)`;
+    const in2=ease(prog(t,21.7,.4));nc[2].style.zIndex=1;nc[2].style.opacity=t<21.7?0:(1-clamp(c*1.2));
+    nc[2].style.transform=`translate(${-c*620}px,${c*-30}px) rotate(${-c*16}deg) scale(${.94+.06*in2})`;
+    if(t>=23.5&&t<23.67){const dx=eio(prog(t,23.5,.17))*-170;nc[2].style.transform=`translate(${dx}px,0) rotate(${dx/24}deg)`;nc[2].style.opacity=1;}
+    $('caught').style.opacity=ease(prog(t,23.9,.5));
+    const h=$('heart');const hp=pressed(t,21.4)?.9:(t>=21.4&&t<21.7?1.15:1);h.style.transform=`translate(-50%,-50%) scale(${hp})`;h.style.opacity=ease(prog(t,t0+.2,.4));setIcon(false);}
+  if(idx===6){const t0=S[6];rev(caps[6],t,t0+.05);
+    const full='pay rent friday 5pm';const n=Math.floor(clamp((t-24.8)/(26.0-24.8))*full.length);const added=t>=26.04;
+    $('tq').textContent=added?'':full.slice(0,n);$('ph').style.display=(n>0&&!added)?'none':'inline';$('caret').style.opacity=(!added&&t>=24.5&&Math.floor(t*2.4)%2===0)?1:0;
+    $('inp').style.transform=`translate(-50%,-50%) scale(${pressed(t,24.5)?.985:1})`;
+    const ab=$('addb');ab.style.transform=`translate(-50%,-50%) scale(${pressed(t,26.04)?.92:1})`;
+    const r1=back(prog(t,26.1,.45));$('t1').style.opacity=clamp(r1*2);$('t1').style.transform=`translate(-50%,calc(-50% + ${(1-r1)*24}px))`;
+    $('t1a').style.transform=`scale(${back(prog(t,26.2,.3))})`;$('t1b').style.transform=`scale(${back(prog(t,26.4,.3))})`;$('t1a').style.display=$('t1b').style.display='inline-block';
+    const r2=ease(prog(t,27.5,.5));$('t2').style.opacity=r2;$('t2').style.transform=`translate(-50%,calc(-50% + ${(1-r2)*26}px))`;
+    const ck=t>=29.27;$('ok').style.background=ck?'#d97757':'transparent';$('ok').style.borderColor=ck?'#d97757':'#141413';$('okv').style.opacity=ck?1:0;
+    $('ok').style.transform=`translate(-50%,-50%) scale(${pressed(t,29.27)?.88:(t>=29.27&&t<29.55?1.15:1)})`;
+    const done=ease(prog(t,29.4,.5));$('t2t').style.textDecoration=done>0?'line-through':'none';$('t2').style.opacity=r2*(1-done*.45);setIcon(false);}
+  if(idx===7){const t0=S[7];rev(caps[7],t,t0+.05);
+    const dn=Math.floor(clamp((t-31.6)/(33.0-31.6))*28);$('dots').textContent='•'.repeat(dn);
+    $('keyf').style.transform=`translate(-50%,-50%) scale(${pressed(t,31.45)?.985:1})`;
+    const b=$('btn4');b.style.transform=`translate(-50%,-50%) scale(${pressed(t,33.72)?.94:1})`;b.style.opacity=ease(prog(t,t0+.3,.4));
+    const lp=back(prog(t,33.85,.5));const lk=$('lock');lk.style.opacity=clamp(lp*2);lk.style.transform=`translate(-50%,-50%) scale(${lp})`;
+    $('shackle').setAttribute('d',t>=33.85?'M8 11V8a4 4 0 0 1 8 0v3':'M8 11V6a4 4 0 0 1 7.2-2.4');
+    $('saved').style.opacity=ease(prog(t,34.1,.5));setIcon(false);}
+  if(idx===8){[['m1',35.43],['m2',36.07],['m3',36.7]].forEach(([id,ts])=>{const p=back(prog(t,ts,.45));const e=$(id);e.style.opacity=clamp(p*3);e.style.transform=`translate(-50%,-50%) scale(${.82+.18*p})`;e.style.filter=`blur(${(1-ease(prog(t,ts,.3)))*10}px)`;});
+    const out=ease(prog(t,37.7,.4));document.getElementById('s8').style.opacity=1-out;setIcon(false);}
+  else document.getElementById('s8').style.opacity=1;
+  if(idx===9){const t0=S[9];const p=ease(prog(t,t0,1.4));const bp=back(prog(t,t0,.8));
+    $('blob2').style.opacity=.0;
+    setIcon(true,380,360,.55+.25*p,-3.4+p*3.4+Math.sin((t-t0)*1.5)*.14*(1-p*.4),.1);iconOn=true;
+    const tp=ease(prog(t,t0+.35,.6));$('t9').style.opacity=tp;$('t9').style.transform=`translate(calc(-50% + ${(1-tp)*40}px),-50%)`;
+    const bq=back(prog(t,t0+.7,.5));const b=$('btn5');b.style.opacity=clamp(bq*2);
+    const hov=ease(prog(t,38.9,.3));b.style.transform=`translate(-50%,-50%) scale(${pressed(t,39.29)?.94:(.9+.1*bq)+hov*.03})`;
+    $('u9').style.opacity=ease(prog(t,t0+1.0,.5));}
+  // cursor
+  const cv_=vis(t);cur.style.display=cv_?'block':'none';
+  if(cv_){const q=cpos(t);cur.style.left=(q[1]-6)+'px';cur.style.top=(q[2]-4)+'px';
+    const dark=(idx===7);const down=CK.some(tc=>pressed(t,tc))||(t>=19.95&&t<20.21)||(t>=23.5&&t<23.67);
+    cur.style.transform=`scale(${down?.86:1})`;cur.style.opacity=ease(prog(t,3.7,.3))*(t>=38.45?ease(prog(t,38.45,.3)):1);}
+  bursts(t);
+  return idx;};
+window.seek=t=>seekOld(inv(t));window.TOTAL=END;window.ready=true;
+</script></body></html>

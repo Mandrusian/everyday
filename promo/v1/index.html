@@ -1,0 +1,181 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+:root{--cream:#f4f1e8;--ink:#141413;--dark:#1c1b19;--raised:#25231f;--line:#33312c;--acc:#d97757;--accT:#e8916f;--amber:#e0a84a;--blue:#7fb0d6;--green:#8fc29a;--serif:ui-serif,"New York",Georgia,serif;--sans:-apple-system,"SF Pro Text",system-ui,sans-serif}
+html,body{margin:0;background:#000;overflow:hidden}
+#v{position:relative;width:1280px;height:720px;overflow:hidden;font-family:var(--sans)}
+.sc{position:absolute;inset:0;display:none}
+canvas#gl{position:absolute;inset:0;width:1280px;height:720px;pointer-events:none;z-index:5}
+.abs{position:absolute}
+.serif{font-family:var(--serif)}
+.w{display:inline-block;white-space:pre}
+.head{position:absolute;left:72px;top:64px;font:400 54px/1.1 var(--serif);letter-spacing:-.015em;width:520px}
+.card{position:absolute;background:#fbf9f3;border:1px solid #e2ddcf;border-radius:16px}
+.dark .card{background:var(--raised);border-color:var(--line)}
+.chip{display:inline-block;padding:3px 10px;border-radius:7px;font:600 13px var(--sans);margin-right:8px}
+.row{position:absolute;left:0;width:560px;height:88px;border-radius:14px;background:#fbf9f3;border:1px solid #e2ddcf;box-sizing:border-box;padding:14px 18px}
+.row b{font:600 17px var(--sans);color:#141413}.row span.s{display:block;font:15px var(--sans);color:#6f6a5d;margin-top:3px}
+.row .sub{font:14px var(--sans);color:#8a8578}
+.u{color:var(--accT);font-weight:600}.d{color:var(--amber);font-weight:600}.p{color:var(--blue);font-weight:600}
+.cur{position:absolute;width:26px;height:26px;z-index:9}
+</style></head>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js","three/addons/":"./vendor/addons/"}}</script>
+<body><div id="v">
+<canvas id="gl" width="1920" height="1080"></canvas>
+
+<!-- S1 black: dot -> icon -->
+<div class="sc" id="s1" style="background:#141413"><div id="dot" class="abs" style="left:640px;top:360px;width:14px;height:14px;margin:-7px;border-radius:50%;background:#d97757"></div></div>
+
+<!-- S2 cream: inbox -->
+<div class="sc" id="s2" style="background:var(--cream)">
+  <div class="head" id="h2"></div>
+  <div class="abs" id="rows" style="left:640px;top:110px;width:560px;height:500px"></div>
+</div>
+
+<!-- S3 dark: briefing -->
+<div class="sc dark" id="s3" style="background:var(--dark)">
+  <div class="card" style="left:180px;top:110px;width:920px;height:500px"></div>
+  <div class="abs serif" id="greet" style="left:236px;top:150px;font-size:30px;color:#ece8df;letter-spacing:-.01em"></div>
+  <div class="abs serif" id="brief" style="left:236px;top:214px;width:810px;font-size:31px;line-height:44px;color:#d8d3c7"></div>
+  <div class="abs" id="chips3" style="left:236px;top:430px"></div>
+  <svg class="cur" id="cur" viewBox="0 0 24 24"><path d="M3 2l7 18 2.6-7.4L20 10z" fill="#fff" stroke="#141413" stroke-width="1.6" stroke-linejoin="round"/></svg>
+</div>
+
+<!-- S4 cream: news + tasks -->
+<div class="sc" id="s4" style="background:var(--cream)">
+  <div class="head" id="h4" style="width:1000px;font-size:50px"></div>
+  <div class="abs" id="news" style="left:96px;top:250px;width:520px;height:330px"></div>
+  <div class="abs" id="tasks" style="left:690px;top:250px;width:500px;height:330px"></div>
+</div>
+
+<!-- S5 dark: privacy -->
+<div class="sc dark" id="s5" style="background:var(--dark)"><div class="abs serif" id="p5" style="left:0;right:0;top:230px;text-align:center;font-size:76px;line-height:1.15;color:#ece8df;letter-spacing:-.02em"></div></div>
+
+<!-- S6 cream: outro -->
+<div class="sc" id="s6" style="background:var(--cream)">
+  <div class="abs serif" id="t6" style="left:580px;top:250px;font-size:104px;letter-spacing:-.03em;color:#141413;font-weight:450">everyday<span style="color:#d97757">.</span></div>
+  <div class="abs" id="u6" style="left:588px;top:410px;font:500 26px var(--sans);color:#6f6a5d"></div>
+</div>
+</div>
+
+<script type="module">
+import * as THREE from './vendor/three.module.min.js';
+import {GLTFLoader} from './vendor/addons/loaders/GLTFLoader.js';
+import {RoomEnvironment} from './vendor/addons/environments/RoomEnvironment.js';
+
+const B=0.535, bt=n=>n*B, T_END=40*B;
+const clamp=(x,a=0,b=1)=>Math.min(b,Math.max(a,x)), ease=x=>1-Math.pow(1-clamp(x),3), easeIO=x=>{x=clamp(x);return x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2};
+const prog=(t,a,d)=>clamp((t-a)/d);
+const $=id=>document.getElementById(id);
+
+/* three */
+const canvas=$('gl'); const R=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true,preserveDrawingBuffer:true});
+R.setPixelRatio(1);R.setSize(1920,1080,false);R.toneMapping=THREE.ACESFilmicToneMapping;R.toneMappingExposure=1.05;R.outputColorSpace=THREE.SRGBColorSpace;
+const scene=new THREE.Scene();const pm=new THREE.PMREMGenerator(R);scene.environment=pm.fromScene(new RoomEnvironment(),.04).texture;scene.environmentIntensity=.85;
+const key=new THREE.DirectionalLight(0xffe3cf,2.2);key.position.set(3,4,5);scene.add(key);
+const rim=new THREE.DirectionalLight(0xd97757,1.4);rim.position.set(-4,-1,-3);scene.add(rim);
+const cam=new THREE.PerspectiveCamera(30,16/9,.1,50);cam.position.set(0,0,8);
+const icon=new THREE.Group();scene.add(icon);
+await new Promise(res=>new GLTFLoader().load('everyday-3d-icon.glb',g=>{const m=g.scene;const b=new THREE.Box3().setFromObject(m);const s=b.getSize(new THREE.Vector3()),c=b.getCenter(new THREE.Vector3());m.position.sub(c);m.scale.setScalar(2.1/Math.max(s.x,s.y));icon.add(m);res();}));
+const halfH=Math.tan(THREE.MathUtils.degToRad(15))*8, halfW=halfH*16/9;
+function setIcon(vis,xpx,ypx,sc,ry,rx,rz=0){canvas.style.opacity=vis?1:0;icon.visible=!!vis;
+  icon.position.set((xpx-640)/640*halfW,-(ypx-360)/360*halfH,0);icon.scale.setScalar(sc);icon.rotation.set(rx,ry,rz);R.render(scene,cam);}
+
+/* helpers */
+function words(el,text,cls=''){el.innerHTML=text.split(' ').map(w=>`<span class="w ${cls}">${w} </span>`).join('');return [...el.children];}
+function reveal(ws,t,start,step=B){ws.forEach((w,i)=>{const p=ease(prog(t,start+i*step,.45));w.style.opacity=p;w.style.transform=`translateY(${(1-p)*16}px)`;w.style.filter=`blur(${(1-p)*7}px)`;});}
+
+/* S2 */
+const h2=$('h2');const h2w=[...words(h2,'Your inbox,').concat(words(document.createElement('div'),'x'))];
+h2.innerHTML='<span class="w">Your </span><span class="w">inbox, </span><br><em class="w" style="font-style:italic;color:#d97757">already </em><em class="w" style="font-style:italic;color:#d97757">read.</em>';
+const h2ws=[...h2.querySelectorAll('.w')];
+const mail=[
+ {f:'Morning Brew',s:'Your weekday briefing',m:'Newsletter · 6 stories',chip:['Newsletter','#e3e8ee','#4d6a85'],from:0,to:3,dim:1},
+ {f:'Parcel Post',s:'Your order has shipped',m:'Arrives Thursday',chip:['Update','#e8e6df','#6f6a5d'],from:1,to:2,dim:1},
+ {f:'Greenfield Property',s:'Lease renewal: sign by Friday',m:'Deadline Fri 5pm',chip:['Deadline','#f3dede','#b4483f'],from:2,to:1,dim:0},
+ {f:'Dana Reyes',s:'Thursday roadmap sync',m:'Wants you to confirm the agenda',chip:['Needs reply','#f6e3d9','#c0603c'],from:3,to:0,dim:0},
+];
+const rowsEl=$('rows');mail.forEach(r=>{const d=document.createElement('div');d.className='row';d.innerHTML=`<b>${r.f}</b><span class="chip" style="float:right;margin:0;opacity:0;background:${r.chip[1]};color:${r.chip[2]}">${r.chip[0]}</span><span class="s">${r.s}</span><span class="sub">${r.m}</span>`;rowsEl.appendChild(d);r.el=d;r.c=d.querySelector('.chip');});
+
+/* S3 */
+const greet=$('greet');greet.textContent='Good morning, Alex.';
+const segs=[['Lease renewal is due ','' ],['Friday','d'],['. Sign it before 5pm.',''],'\n',['Dana','p'],[' needs a reply on the ',''],['roadmap sync','u'],['.',''],'\n',['Three Google sign-in alerts arrived overnight.','']];
+const lines=[[],[],[]];let li=0;segs.forEach(s=>{if(s==='\n'){li++;}else lines[li].push(s);});
+const lineLen=lines.map(l=>l.reduce((a,s)=>a+s[0].length,0));const total=lineLen.reduce((a,b)=>a+b,0);
+const brief=$('brief');brief.innerHTML=[0,1,2].map(i=>`<div class="ln" style="overflow:hidden"></div>`).join('');const lnEls=[...brief.children];
+const chips3=$('chips3');chips3.innerHTML='<span class="chip" id="c1" style="font-size:18px;padding:9px 20px;border-radius:12px;background:#33312c;color:#ece8df;margin-right:12px;opacity:0">That was me</span><span class="chip" style="font-size:18px;padding:9px 20px;border-radius:12px;background:#2d2b27;color:#a39e92;opacity:0" id="c2">Not me</span>';
+const c1=$('c1'),c2=$('c2'),cur=$('cur');
+
+/* S4 */
+const h4=$('h4');h4.innerHTML='<span class="w">News</span> <span class="w">you</span> <span class="w">swipe.</span><br><span class="w"><em style="color:#d97757">Tasks</em></span> <span class="w">you</span> <span class="w">just</span> <span class="w">type.</span>';
+const h4ws=[...h4.querySelectorAll('.w')];
+const news=$('news');news.innerHTML=`<div class="card n1" style="left:0;top:0;width:480px;height:300px;padding:28px;box-sizing:border-box"><div class="chip" style="background:#e3e8ee;color:#4d6a85">Tech</div><div class="serif" style="font-size:32px;line-height:1.15;margin-top:12px;color:#141413">Open-source models close the gap on the big labs</div><div style="margin-top:14px;font-size:15px;color:#6f6a5d;line-height:1.5">Three independent benchmarks agree. Why it matters: cheaper AI you can run yourself.</div></div>
+<div class="card n2" style="left:0;top:0;width:480px;height:300px;padding:28px;box-sizing:border-box;opacity:0"><div class="chip" style="background:#e4ecdf;color:#4f7a52">Science</div><div class="serif" style="font-size:32px;line-height:1.15;margin-top:12px;color:#141413">A quiet record year for home solar in Australia</div><div style="margin-top:14px;font-size:15px;color:#6f6a5d;line-height:1.5">Rooftop installs passed two million. Why it matters: lower bills, steadier grid.</div></div>
+<div class="abs mark" style="left:30px;top:-18px;opacity:0;font:700 22px var(--sans);color:#b4483f;border:2px solid #b4483f;border-radius:8px;padding:2px 10px;transform:rotate(-8deg)">Not for me</div>`;
+const n1=news.querySelector('.n1'),n2=news.querySelector('.n2'),mark=news.querySelector('.mark');
+const tasks=$('tasks');tasks.innerHTML=`<div class="card" style="left:0;top:0;width:500px;height:66px;box-sizing:border-box;padding:18px 22px;font:21px var(--sans);color:#141413"><span id="tq"></span><span id="caret" style="display:inline-block;width:2px;height:22px;background:#d97757;vertical-align:-4px;margin-left:2px"></span></div>
+<div class="card" id="trow" style="left:0;top:90px;width:500px;height:92px;box-sizing:border-box;padding:16px 22px;opacity:0"><div style="font:600 21px var(--sans);color:#141413">Pay rent</div><div style="margin-top:8px"><span class="chip" style="background:#f6e3d9;color:#c0603c">Fri 5pm</span><span class="chip" style="background:#f3dede;color:#b4483f">High</span></div></div>`;
+const tq=$('tq'),caret=$('caret'),trow=$('trow');
+
+/* S5 */
+const p5=$('p5');p5.innerHTML='<div class="l a">No account.</div><div class="l b">No servers.</div><div class="l c" style="font-style:italic;color:#e8916f">Your key, your Mac.</div>';
+const p5l=[...p5.children];
+/* S6 */
+const t6=$('t6'),u6=$('u6');u6.textContent='A$1  ·  or build it free';
+
+const scs=['s1','s2','s3','s4','s5','s6'].map($);
+const cuts=[0,4,12,20,28,34,40].map(bt);
+
+window.seek=function(t){
+  let idx=cuts.findIndex((c,i)=>t>=c&&t<cuts[i+1]);if(idx<0)idx=5;
+  scs.forEach((s,i)=>s.style.display=i===idx?'block':'none');
+  let vis=false;
+  if(idx===0){const p=ease(prog(t,0,bt(2)));const q=ease(prog(t,bt(1.6),bt(2.4)));
+    $('dot').style.transform=`scale(${1+p*0.8})`;$('dot').style.opacity=1-q;
+    vis=q>0;setIcon(vis,640,360,0.25+q*1.1,-2.6+q*3.0+(t>bt(2)?0.15*Math.sin((t-bt(2))*1.4):0),0.12*q);}
+  if(idx===1){const ts=t-cuts[1];reveal(h2ws,t,cuts[1]+0.05,B*0.9);
+    mail.forEach((r,i)=>{const p=ease(prog(t,bt(5)+i*B*0.5,.5));const mv=easeIO(prog(t,bt(10),.55));
+      const y=(r.from+(r.to-r.from)*mv)*104;r.el.style.top=y+'px';
+      const rise=ease(prog(t,cuts[1]+0.1+i*0.12,.5));r.el.style.left=(1-rise)*80+'px';
+      r.el.style.opacity=rise*(1-mv*0.55*r.dim);
+      const cp=ease(prog(t,bt(8)+i*B*0.5,.3));r.c.style.opacity=cp;r.c.style.transform=`scale(${.7+.3*cp})`;});
+    setIcon(false,0,0,1,0,0);}
+  if(idx===2){const ts=t-cuts[2];
+    greet.style.opacity=ease(prog(t,cuts[2],.4));
+    const n=Math.floor(clamp((t-bt(12.8))/(bt(4.2)))*total);let used=0;
+    lines.forEach((l,i)=>{let h='';l.forEach(s=>{const take=clamp(n-used,0,s[0].length);used+=s[0].length;const txt=s[0].slice(0,take);h+=s[1]?`<span class="${s[1]}">${txt}</span>`:txt;});
+      lnEls[i].innerHTML=h||'&nbsp;';});
+    const cp=ease(prog(t,bt(17),.35));c1.style.opacity=cp;c2.style.opacity=cp;c1.style.transform=`scale(${.85+.15*cp})`;
+    const clickT=bt(19), pc=prog(t,bt(17.4),clickT-bt(17.4));
+    const r=c1.getBoundingClientRect();const tx=r.left+r.width*.55, ty=r.top+r.height*.6;
+    const sx=980, sy=560;const e=easeIO(pc);cur.style.left=(sx+(tx-sx)*e)+'px';cur.style.top=(sy+(ty-sy)*e)+'px';
+    cur.style.opacity=cp;
+    const down=t>=clickT&&t<clickT+0.14;cur.style.transform=down?'scale(.85)':'scale(1)';
+    c1.style.background=t>=clickT?'#d97757':'#33312c';c1.style.color=t>=clickT?'#1c1b19':'#ece8df';
+    const col=ease(prog(t,clickT+0.12,.45));
+    lnEls[2].style.height=(44*(1-col))+'px';lnEls[2].style.opacity=1-col;
+    lnEls[2].style.textDecoration=col>0?'line-through':'none';
+    chips3.style.top=(430-44*col)+'px';
+    setIcon(false,0,0,1,0,0);}
+  if(idx===3){reveal(h4ws,t,cuts[3]+0.05,B*0.6);
+    const sw=easeIO(prog(t,bt(22.2),.55));
+    n1.style.transform=`translateX(${-sw*640}px) rotate(${-sw*14}deg)`;n1.style.opacity=1-clamp(sw*1.1-0.2);
+    const sp=ease(prog(t,bt(22.2)+0.2,.5));n2.style.opacity=sp;n2.style.transform=`scale(${.94+.06*sp}) translateY(${(1-sp)*14}px)`;
+    mark.style.opacity=ease(prog(t,bt(22),.2))*(1-sw);
+    const tc=Math.floor(clamp((t-bt(23))/(bt(3.4)))*'pay rent friday 5pm high'.length);
+    tq.textContent='pay rent friday 5pm high'.slice(0,tc);
+    const made=ease(prog(t,bt(27),.4));trow.style.opacity=made;trow.style.transform=`translateY(${(1-made)*18}px)`;
+    caret.style.opacity=(Math.floor(t*2.4)%2===0&&t<bt(27))?1:0;
+    setIcon(false,0,0,1,0,0);}
+  if(idx===4){const ap=[bt(28.3),bt(30.3),bt(32.2)];
+    p5l.forEach((l,i)=>{const p=ease(prog(t,ap[i],.5));l.style.opacity=p;l.style.transform=`translateY(${(1-p)*20}px)`;l.style.filter=`blur(${(1-p)*8}px)`;});
+    setIcon(false,0,0,1,0,0);}
+  if(idx===5){const p=ease(prog(t,cuts[5],bt(1.2)));const wob=Math.sin((t-cuts[5])*1.6)*0.18*(1-p*0.5);
+    setIcon(true,330,372,0.5+0.2*p,-3.2+p*3.4+wob,0.08);
+    const tp=ease(prog(t,cuts[5]+bt(0.8),.6));t6.style.opacity=tp;t6.style.transform=`translateX(${(1-tp)*30}px)`;
+    const up=ease(prog(t,bt(37),.5));u6.style.opacity=up;u6.style.transform=`translateY(${(1-up)*12}px)`;
+    const fo=clamp((t-(T_END-0.6))/0.6);scs[5].style.opacity=1-fo*0;}
+  return idx;
+};
+window.TOTAL=T_END;window.ready=true;
+</script></body></html>

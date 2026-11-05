@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>everyday. — mail, news and tasks in one calm place</title>
+<meta name="description" content="A Mac app that sorts your inbox, reads the news you care about and writes your morning briefing. Open source, local-first, no account.">
+<meta name="theme-color" content="#1c1b19">
+<link rel="stylesheet" href="css/style.css">
+<link rel="preload" href="assets/everyday-3d-icon.glb" as="fetch" crossorigin>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js", "three/addons/": "./vendor/addons/" } }
+</script>
+<!-- DRAFT: placeholders to fill before launch are marked TODO in js/config.js -->
+</head>
+<body>
+<div class="progress" aria-hidden="true"><i></i></div>
+<canvas id="stage" aria-hidden="true"></canvas>
+<div class="loading" id="loading" aria-hidden="true"><span>everyday<b>.</b></span></div>
+
+<header class="nav" id="nav">
+  <a class="brand" href="#top" aria-label="everyday. home">everyday<b>.</b></a>
+  <nav aria-label="Primary">
+    <a href="#mail">Mail</a><a href="#news">News</a><a href="#day">Your day</a><a href="#privacy">Privacy</a><a href="#get">Get it</a>
+    <a class="pill" href="#get" data-buy>Get it · A$1</a>
+  </nav>
+</header>
+
+<main id="top">
+  <section class="panel hero left" data-pose="0.5 0 0.4 0.08 1.25">
+    <div class="copy hero-copy">
+      <p class="eyebrow reveal">For macOS · open source</p>
+      <h1 class="reveal">Your mail, news and day.<br><em>In one calm place.</em></h1>
+      <p class="lede reveal">everyday. sorts your inbox, reads the news you care about, and writes your morning briefing. It runs on your Mac with your own AI key. No account, no servers, no analytics.</p>
+      <div class="cta reveal">
+        <a class="btn primary" href="#get" data-buy>Get everyday. — A$1</a>
+        <a class="btn" href="#get">Build it from source, free</a>
+      </div>
+      <p class="fine reveal">macOS 15 or later · Apple silicon and Intel</p>
+    </div>
+    <a class="scroll-hint" href="#mail" aria-label="Scroll to features"><span></span></a>
+  </section>
+
+  <section class="panel right" id="mail" data-pose="0.8 -0.68 -0.5 0.05 0.4">
+    <div class="copy">
+      <p class="eyebrow reveal">Mail</p>
+      <h2 class="reveal">An inbox that triages itself.</h2>
+      <p class="reveal">Every message is read and labelled: needs a reply, has a deadline, newsletter, promotion. The ones that matter float to the top, each with a one-line summary.</p>
+      <ul class="ticks reveal">
+        <li>Summaries of long threads, with the action items pulled out</li>
+        <li>Reply drafts in three tones. You edit, you press send.</li>
+        <li><strong>Never sends, archives or deletes without your approval</strong></li>
+        <li>Connects with an app password: Gmail, iCloud, Fastmail, Yahoo or any IMAP server</li>
+      </ul>
+    </div>
+    <figure class="shot reveal"><img src="img/today.jpg" alt="The Today screen of everyday. with a greeting, daily briefing, weather and priority lists" loading="lazy"><figcaption>Today: briefing, weather, inbox, news and tasks.</figcaption></figure>
+  </section>
+
+  <section class="panel left" id="news" data-pose="-0.8 -0.68 0.6 -0.06 0.4">
+    <figure class="shot reveal"><img src="img/news.jpg" alt="The news reader of everyday. with a story list and a serif article view" loading="lazy"><figcaption>A reader built for long form, with a summary and the sources.</figcaption></figure>
+    <div class="copy">
+      <p class="eyebrow reveal">News</p>
+      <h2 class="reveal">News that learns what you like.</h2>
+      <p class="reveal">Real stories from sources you choose, with duplicates folded together and old stories dropped. Start by swiping through a deck: right for interested, left for not, up for love it.</p>
+      <ul class="ticks reveal">
+        <li>Summaries with a “why it matters” line, always linking the original</li>
+        <li>Learns from what you read and save. All on your Mac.</li>
+        <li>One story in ten comes from outside your usual bubble</li>
+        <li>Add any RSS or Atom feed. Retrain whenever you like.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="panel right" id="day" data-pose="0.8 -0.68 -1.0 0.1 0.4">
+    <div class="copy">
+      <p class="eyebrow reveal">Your day</p>
+      <h2 class="reveal">Tasks found for you.<br>A briefing every morning.</h2>
+      <p class="reveal">Deadlines and to-dos in your email become suggestions you accept or dismiss. Each morning the app writes a short note: what needs you, what’s on the calendar, the weather, and the stories that matter.</p>
+      <ul class="ticks reveal">
+        <li>Reminders and optional sync with Apple Reminders</li>
+        <li>Ask the built-in assistant about your mail, tasks and news</li>
+        <li>A menu bar item shows what needs you right now</li>
+      </ul>
+    </div>
+    <div class="stack reveal" aria-hidden="true">
+      <div class="chip a"><b>Needs reply</b> Dana · Thursday roadmap sync</div>
+      <div class="chip b"><b>Deadline</b> Sign lease renewal · Fri</div>
+      <div class="chip c"><b>Suggested task</b> Pay invoice #2041</div>
+    </div>
+  </section>
+
+  <section class="panel left" id="privacy" data-pose="0.55 0 3.4 0.04 1.05">
+    <div class="copy wide">
+      <p class="eyebrow reveal">Privacy</p>
+      <h2 class="reveal">Private by design.</h2>
+      <p class="reveal">everyday. has no servers. Your mail, tasks and preferences live in a database on your Mac. Passwords and keys live in the macOS Keychain.</p>
+      <div class="grid reveal">
+        <div><h3>Stays on your Mac</h3><p>Mail, tasks, interests, saved stories and everything the app has learned about you.</p></div>
+        <div><h3>Goes to your providers</h3><p>Mail from your mail provider. Articles from their publishers. Your city name to a weather service.</p></div>
+        <div><h3>Goes to an AI only if you add a key</h3><p>You choose Gemini, Claude, OpenAI, a local model or Apple’s on-device model. A log shows every request and the exact text sent.</p></div>
+        <div><h3>Never</h3><p>No account, no tracking, no analytics, no ads. The source is public so you can check.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel center" id="get" data-pose="0.9 0.62 0.3 0.1 0.45">
+    <p class="eyebrow reveal">Get it</p>
+    <h2 class="reveal">Same app, two ways.</h2>
+    <div class="cards reveal">
+      <article class="card feature">
+        <h3>The app</h3>
+        <p class="price">A$1</p>
+        <p>A ready-to-run download. Drag to Applications and go. It helps keep the project alive.</p>
+        <a class="btn primary" href="#" data-buy>Buy for A$1</a>
+        <small>One-off payment. Updates included.</small>
+      </article>
+      <article class="card">
+        <h3>The source</h3>
+        <p class="price">Free</p>
+        <p>Clone the repository and build it yourself. It’s the same code and the same app.</p>
+        <pre><code>git clone <span data-repo-url>github.com/…/everyday</span>
+cd everyday
+./Scripts/bundle.sh</code></pre>
+        <a class="btn" href="#" data-repo>View on GitHub</a>
+        <small>Needs the Xcode command line tools.</small>
+      </article>
+    </div>
+    <p class="fine reveal">For Apple silicon and Intel Macs on macOS 15 or later. Windows isn’t available yet.</p>
+  </section>
+
+  <section class="panel faq" data-pose="0.9 -0.7 0.2 0.1 0.4">
+    <h2 class="reveal">Questions</h2>
+    <div class="qa reveal">
+      <details><summary>Why does macOS say it can’t verify the app?</summary><p>The app isn’t signed with a paid Apple Developer ID yet. Open it once with right-click → Open, or go to System Settings → Privacy &amp; Security and press “Open Anyway”. You only do this once. Building from source avoids the warning.</p></details>
+      <details><summary>Which AI does it use, and what does that cost?</summary><p>Your own. Add a key for Gemini, Claude or OpenAI, point it at a local model such as Ollama, or use Apple’s on-device model. You pay your provider directly, and Gemini has a free tier. The app works without any AI too: news, tasks and the inbox still run.</p></details>
+      <details><summary>Does my email get sent to an AI?</summary><p>Only if you add a key, and only what you can see in the activity log. You can send subject lines and short snippets instead of full bodies, and signatures and quoted replies are always stripped first.</p></details>
+      <details><summary>Which mail accounts work?</summary><p>Anything with IMAP and an app password: Gmail, iCloud, Fastmail, Yahoo and more. Microsoft no longer allows app passwords on most Outlook accounts, so Outlook isn’t supported yet.</p></details>
+      <details><summary>Is there a Windows version?</summary><p>Not yet. This version is built natively for the Mac.</p></details>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <span>everyday<b>.</b> · a <a href="https://mandrusia.tech">mandrusia</a> project</span>
+  <span><a href="#" data-repo>GitHub</a> · <a href="privacy.html">Privacy policy</a></span>
+</footer>
+
+<script src="vendor/gsap.min.js"></script>
+<script src="vendor/ScrollTrigger.min.js"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

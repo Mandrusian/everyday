@@ -1,0 +1,18 @@
+[package]
+name = "everyday-app"
+version = "0.1.0"
+edition = "2021"
+description = "everyday. for Windows: Tauri shell around everyday-core"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+everyday-core = { path = "../core" }
+ureq = "2"
+base64 = "0.22"
+

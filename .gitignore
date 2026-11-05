@@ -1,0 +1,9 @@
+.DS_Store
+.build/
+build/
+windows/target/
+node_modules/
+promo/**/*.mp4
+promo/**/frames/
+roast_video/
+*.dmg
