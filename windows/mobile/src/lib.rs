@@ -13,6 +13,8 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::Mutex;
 
+mod synchost;
+
 static STORE: OnceCell<Mutex<Store>> = OnceCell::new();
 static DIR: OnceCell<String> = OnceCell::new();
 
@@ -243,6 +245,7 @@ pub fn run(cmd: &str, args: &Value, secrets: &dyn SecretStore) -> Result<Value, 
         }
         "setPref" => { let _ = st()?.put("pref", &s(args, "key"), 0.0, &s(args, "value")); json!(null) }
         "getPref" => json!(pref(&*st()?, &s(args, "key"))),
+        c if c.starts_with("sync") => synchost::run(c, args, secrets)?,
         other => return Err(format!("Unknown command: {other}")),
     })
 }

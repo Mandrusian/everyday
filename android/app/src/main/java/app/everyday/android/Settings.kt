@@ -9,6 +9,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -134,8 +135,66 @@ fun SettingsSheet(model: AppModel, onClose: () -> Unit) {
             if (morning) Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp)) {
                 listOf(6, 7, 8, 9).forEach { hr -> Chip("$hr:00", { hour = hr; model.setPref("morningHour", "$hr") }, accent = hour == hr) }
             }
+            SectionLabel("Sync", Modifier.padding(top = 18.dp))
+            SyncSection()
+
             Spacer(Modifier.height(24.dp))
             Text("everyday. is free and open source (GPL-3.0). Your mail stays on this phone.", style = Type.small, color = p.text3)
         }
     }
+}
+
+
+/** Pair with the Mac or Windows PC over Wi‑Fi: scan its code, type it, or show this phone's code. */
+@Composable
+fun SyncSection() {
+    val p = pal(); val scope = rememberCoroutineScope(); val ctx = androidx.compose.ui.platform.LocalContext.current
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val st = SyncLink.status
+    var code by remember { mutableStateOf<String?>(null) }
+    var includeSetup by remember { mutableStateOf(true) }
+    var typed by remember { mutableStateOf("") }
+    var err by remember { mutableStateOf<String?>(null) }
+    fun join(uri: String) = scope.launch {
+        try { SyncLink.status = Core.run("syncJoin", json("uri" to uri)) as org.json.JSONObject; err = null; typed = ""; haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); Core.run("syncNow") }
+        catch (e: Core.Failure) { err = e.message }
+    }
+    val scan = androidx.activity.compose.rememberLauncherForActivityResult(com.journeyapps.barcodescanner.ScanContract()) { r -> r.contents?.let { join(it) } }
+
+    Text("Keep tasks, news topics and handled mail the same on your phone, Mac and PC. Devices talk directly over your Wi‑Fi, encrypted. No server.", style = Type.small, color = p.text2, modifier = Modifier.padding(bottom = 8.dp))
+    if (st.optBoolean("paired")) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(8.dp).background(if (st.optInt("nearby") > 0) p.clay else p.text3, androidx.compose.foundation.shape.CircleShape))
+            Spacer(Modifier.width(10.dp))
+            Text(if (st.optInt("nearby") == 0) "Paired. Looking for your devices on this Wi‑Fi." else "${st.optInt("nearby")} nearby", style = Type.body, color = p.text, modifier = Modifier.weight(1f))
+            QuietButton("Sync now", { scope.launch { runCatching { Core.run("syncNow") } } })
+        }
+        val devs = st.optJSONArray("devices")
+        for (i in 0 until (devs?.length() ?: 0)) {
+            val d = devs!!.getJSONObject(i)
+            Text("${d.optString("name")} · synced ${android.text.format.DateUtils.getRelativeTimeSpanString(d.optLong("at") * 1000)}", style = Type.small, color = p.text2, modifier = Modifier.padding(top = 4.dp))
+        }
+        if (!st.isNull("error") && st.optString("error").isNotEmpty()) Text(st.optString("error"), style = Type.small, color = p.clay)
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 10.dp)) {
+        QuietButton("Scan a code", { scan.launch(com.journeyapps.barcodescanner.ScanOptions().setPrompt("Scan the code in everyday. Settings → Sync").setBeepEnabled(false).setOrientationLocked(false).setDesiredBarcodeFormats(com.journeyapps.barcodescanner.ScanOptions.QR_CODE)) })
+        QuietButton(if (code == null) "Show this phone's code" else "Hide code", { scope.launch { code = if (code == null) Core.run("syncPairingUri", json("includeSetup" to includeSetup)) as String else null; SyncLink.start(ctx) } })
+    }
+    if (code == null) Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp)) {
+        Column(Modifier.weight(1f)) {
+            Text("Include my accounts and keys", style = Type.body, color = p.text)
+            Text("Quick setup: the new device gets your mail, AI key and settings. The code works once, for 10 minutes.", style = Type.small, color = p.text2)
+        }
+        Switch(includeSetup, { includeSetup = it }, colors = SwitchDefaults.colors(checkedTrackColor = p.clay, checkedThumbColor = p.paper, uncheckedTrackColor = p.line, uncheckedBorderColor = p.line, uncheckedThumbColor = p.paper))
+    }
+    androidx.compose.animation.AnimatedVisibility(code != null) {
+        code?.let { c -> Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
+            androidx.compose.foundation.Image(SyncLink.qr(c).asImageBitmap(), "Pairing code", Modifier.size(220.dp).background(androidx.compose.ui.graphics.Color.White, androidx.compose.foundation.shape.RoundedCornerShape(14.dp)).padding(10.dp))
+            Text(if (includeSetup) "Carries your mail password and AI key for 10 minutes. Only show it to your own devices." else "Only show this to your own devices.", style = Type.small, color = p.text3, modifier = Modifier.padding(top = 6.dp))
+        } }
+    }
+    Field("Or paste a code", typed, { typed = it }, placeholder = "everyday-sync:1:…")
+    if (typed.isNotBlank()) QuietButton("Join", { join(typed) })
+    err?.let { Text(it, style = Type.small, color = p.clay) }
+    if (st.optBoolean("paired")) QuietButton("Stop syncing on this phone", { scope.launch { Core.run("syncLeave"); code = null; SyncLink.status = Core.run("syncStatus") as org.json.JSONObject } }, Modifier.padding(top = 8.dp))
 }

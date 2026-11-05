@@ -42,6 +42,7 @@
 - Teach me deck on Windows: cards fly off and can be dragged (done 6 Nov).
 
 ## Mac
+- **Bug (6 Nov):** Mac widgets stopped working after the Liquid Glass default and clear background change (7a3cd24). The user parked this to do sync first.
 - **Widgets:** 15 widgets, a Flat or Liquid Glass look, and Custom 1–3 built in Settings → Widgets.
 - **AppIntents widget configuration is impossible:** it needs Xcode's metadata processor, and the build uses SwiftPM.
 - **Interests:** onboarding already has topics and the swipe deck, and Settings → Interests can retrain.

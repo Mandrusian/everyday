@@ -22,4 +22,5 @@ pub mod tts;
 pub mod skim;
 pub mod smtp;
 pub mod store;
+pub mod sync;
 pub mod updates;

@@ -640,5 +640,29 @@ check("skim: empty or dotted highlights and stray braces vanish", SkimMarkup.seg
 // Widgets snapshot
 check("widgets: short brief ends on a sentence", WidgetSnapshot.shortBrief("## Needs you\nPay rent by Friday. Oscar wants to know whether Thursday at three still works for the roadmap sync with the whole team.", limit: 40) == "Pay rent by Friday.", WidgetSnapshot.shortBrief("## Needs you\nPay rent by Friday. Oscar wants to know whether Thursday at three still works for the roadmap sync with the whole team.", limit: 40))
 
+
+// MARK: Sync (shared vectors with windows/core/src/sync.rs)
+do {
+    let g = SyncGroup(keyBase64: "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8")!
+    check("sync: interop group id matches Rust", g.id == "4419e5b0d61c293a", g.id)
+    let opened = try? g.open(Data(base64URL: "ZGVmZ2hpamtsbW5vUWfeuOHBFyvV-BLfLwERKFJTnBHQI1vuOw")!)
+    check("sync: opens a frame sealed by Rust", opened == Data("everyday.".utf8))
+    check("sync: wrong group can't open", (try? SyncGroup().open(g.seal(Data("x".utf8)))) == nil)
+    check("sync: pairing code round-trips", SyncGroup(pairingURI: g.pairingURI)?.id == g.id)
+    check("sync: mail key matches Rust", SyncKeys.mailKey(from: "A@x.com", subject: "Re: FWD:  Lease   renewal") == "d36a0a59c18320fc")
+    var a = SyncState(), b = SyncState()
+    a.set("task:1", .object(["title": .string("Pay rent")]), now: 100, device: "mac")
+    b.set("task:1", .object(["title": .string("Pay rent today")]), now: 200, device: "phone")
+    b.delete("task:2", now: 50, device: "phone")
+    let changed = a.merge(b)
+    check("sync: newest wins, deletes spread", a.records["task:1"]?.v["title"].string == "Pay rent today" && a.records["task:2"]?.del == true && changed.count == 2)
+    check("sync: merging back changes nothing", b.merge(a).isEmpty)
+    let rustJSON = #"{"device":"p","name":"Phone","state":{"records":{"task:x":{"v":{"title":"Call Oscar","due":1800000000,"done":null},"t":5,"d":"p"},"topic:ai":{"v":null,"t":6,"d":"p","del":true}}}}"#
+    let h = try? JSONDecoder().decode(SyncHello.self, from: Data(rustJSON.utf8))
+    check("sync: reads the Rust hello", h?.state.records["task:x"]?.v["due"].int == 1800000000 && h?.state.records["topic:ai"]?.del == true)
+    let back = (try? JSONEncoder().encode(h!.state.records["task:x"]!)).map { String(decoding: $0, as: UTF8.self) } ?? ""
+    check("sync: writes integers and omits del:false like Rust", back.contains("1800000000") && !back.contains("1800000000.0") && !back.contains("del"), back)
+}
+
 print(failures == 0 ? "ALL CHECKS PASSED" : "\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)

@@ -19,6 +19,7 @@ struct SettingsView: View {
         .notifications: "notifications reminders alerts briefing time",
         .appearance: "appearance theme dark light highlight skim colours font size motion",
         .widgets: "widgets desktop clock weather calendar quote brief notification centre",
+        .sync: "sync devices pair phone android windows wifi qr code",
         .advanced: "advanced prompt briefing instructions system custom edit reset",
     ]
     private var matches: [SettingsPane] {
@@ -67,6 +68,7 @@ struct SettingsView: View {
                         case .notifications: NotificationsPane()
                         case .appearance: AppearancePane()
                         case .widgets: WidgetsPane()
+                        case .sync: SyncPane()
                         case .advanced: AdvancedPane()
                         }
                     }.padding(.horizontal, 40).padding(.vertical, 28).frame(maxWidth: 760, alignment: .leading).frame(maxWidth: .infinity, alignment: .leading)
@@ -825,5 +827,78 @@ struct AppearancePane: View {
                     .padding(16).frame(maxWidth: .infinity, alignment: .leading).background(RoundedRectangle(cornerRadius: 8).fill(Palette.raised))
             }
         }
+    }
+}
+
+/// Wi‑Fi sync with the person's other devices: pair once with a QR code or code, then tasks, topics and handled mail stay in step.
+struct SyncPane: View {
+    @Environment(AppModel.self) private var model
+    @Local private var code = ""
+    @Local private var entered = ""
+    @Local private var showCode = false
+    @Local private var includeSetup = true
+    @Local private var error: String?
+
+    var body: some View {
+        let _ = model.syncTick
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Keep tasks, news topics and handled mail the same on your Mac, Android phone and Windows PC. Devices talk directly over your Wi‑Fi, encrypted with a key only they hold. Nothing goes through a server.").font(.ui(15)).foregroundStyle(Palette.text2)
+
+            SectionLabel("This Mac").padding(.top, 6)
+            if model.sync.isPaired {
+                HStack(spacing: 10) {
+                    Circle().fill(model.sync.nearby > 0 ? Palette.accent : Palette.text3).frame(width: 8, height: 8)
+                    Text(model.sync.nearby == 0 ? "Paired. Looking for your other devices on this network." : "\(model.sync.nearby) device\(model.sync.nearby == 1 ? "" : "s") nearby.").font(.ui(15))
+                    Spacer()
+                    Button("Sync now") { model.sync.syncNow() }.buttonStyle(QuietButtonStyle())
+                }
+                ForEach(model.sync.seen.values.sorted { $0.at > $1.at }, id: \.name) { s in
+                    HStack { Text(s.name).font(.ui(15, .medium)); Spacer(); Text("Synced " + s.at.formatted(.relative(presentation: .named))).font(.ui(13)).foregroundStyle(Palette.text3) }
+                }
+                if let e = model.sync.lastError { Text(e).font(.ui(13)).foregroundStyle(Palette.alertFG) }
+            } else {
+                Text("Not paired yet.").font(.ui(15)).foregroundStyle(Palette.text2)
+            }
+
+            SectionLabel("Add a device").padding(.top, 6)
+            Text("On the other device, open Settings → Sync and scan this code, or type it in.").font(.ui(14)).foregroundStyle(Palette.text2)
+            if showCode, let img = QR.image(code) {
+                HStack(alignment: .top, spacing: 18) {
+                    Image(nsImage: img).interpolation(.none).resizable().frame(width: 180, height: 180).padding(10).background(RoundedRectangle(cornerRadius: 12).fill(.white))
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(code).font(.system(size: 12, design: .monospaced)).textSelection(.enabled).foregroundStyle(Palette.text2)
+                        Button("Copy code") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(code, forType: .string) }.buttonStyle(QuietButtonStyle())
+                        Text(includeSetup ? "This code carries your mail passwords and AI keys for the next 10 minutes. Only show it to your own devices." : "Anyone with this code can join your devices. Only show it to your own.").font(.ui(12.5)).foregroundStyle(Palette.text3)
+                    }
+                }.transition(.opacity.combined(with: .scale(scale: 0.96)))
+            } else {
+                Row(title: "Include my accounts and keys", detail: "Quick setup: the new device gets your mail accounts and passwords, AI keys and settings, so there's nothing to type. The code works once, for 10 minutes.") {
+                    Toggle("Include accounts and keys", isOn: $includeSetup).labelsHidden()
+                }
+                Button("Show pairing code") { do { code = try model.sync.pairingURI(includeSetup: includeSetup); withAnimation(.snappy) { showCode = true } } catch { self.error = error.localizedDescription } }.buttonStyle(PrimaryButtonStyle())
+            }
+
+            SectionLabel("Join another device").padding(.top, 6)
+            HStack {
+                TextField("Paste the code from your other device", text: $entered).textFieldStyle(.roundedBorder)
+                Button("Join") {
+                    do { try model.sync.join(entered); entered = ""; error = nil; model.say("Paired. Syncing over Wi‑Fi.") } catch { self.error = error.localizedDescription }
+                }.buttonStyle(QuietButtonStyle()).disabled(entered.isEmpty)
+            }
+            if let error { Text(error).font(.ui(13)).foregroundStyle(Palette.alertFG) }
+
+            if model.sync.isPaired {
+                Button("Stop syncing on this Mac") { model.sync.leave(); showCode = false; model.say("This Mac no longer syncs.") }.buttonStyle(QuietButtonStyle()).padding(.top, 10)
+            }
+        }
+    }
+}
+
+enum QR {
+    static func image(_ text: String) -> NSImage? {
+        guard let f = CIFilter(name: "CIQRCodeGenerator") else { return nil }
+        f.setValue(Data(text.utf8), forKey: "inputMessage"); f.setValue("M", forKey: "inputCorrectionLevel")
+        guard let out = f.outputImage?.transformed(by: CGAffineTransform(scaleX: 8, y: 8)) else { return nil }
+        let rep = NSCIImageRep(ciImage: out); let img = NSImage(size: rep.size); img.addRepresentation(rep); return img
     }
 }

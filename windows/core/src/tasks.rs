@@ -17,7 +17,8 @@ impl Task { pub fn is_done(&self) -> bool { self.completed_at.is_some() } }
 fn repeat_of(s: &str) -> Option<Repeat> { match s { "daily" => Some(Repeat::Daily), "weekdays" => Some(Repeat::Weekdays), "weekly" => Some(Repeat::Weekly), "monthly" => Some(Repeat::Monthly), "yearly" => Some(Repeat::Yearly), _ => None } }
 fn repeat_name(r: Repeat) -> &'static str { match r { Repeat::Daily => "daily", Repeat::Weekdays => "weekdays", Repeat::Weekly => "weekly", Repeat::Monthly => "monthly", Repeat::Yearly => "yearly" } }
 
-pub fn new_id(now: i64, n: usize) -> String { format!("task-{now}-{n}") }
+/// Unique across devices too, since tasks sync between them.
+pub fn new_id(now: i64, n: usize) -> String { let mut b = [0u8; 3]; let _ = getrandom::getrandom(&mut b); format!("task-{now}-{n}-{:02x}{:02x}{:02x}", b[0], b[1], b[2]) }
 
 pub fn add_quick<Tz: TimeZone>(store: &Store, input: &str, now: &DateTime<Tz>) -> Task {
     let p = quickadd::parse(input, now);

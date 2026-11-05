@@ -15,6 +15,9 @@ struct OnboardingView: View {
     @Local private var key = ""
     @Local private var testing = false
     @Local private var testResult: (ok: Bool, text: String)? = nil
+    @Local private var pairCode = ""
+    @Local private var pairing = false
+    @Local private var pairError: String?
 
     var body: some View {
         ZStack {
@@ -42,6 +45,18 @@ struct OnboardingView: View {
                     promise("You bring the AI.", "Your own key, stored in the macOS Keychain. You can read every request sent.")
                     promise("Nothing happens without you.", "Sending, archiving and deleting always wait for your approval.")
                 }.padding(.top, 14)
+                // Quick setup from a phone or PC that already has everyday.: accounts, keys and settings arrive over Wi‑Fi.
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Already use everyday. on another device?").font(.ui(15, .medium))
+                    Text("On it, open Settings → Sync → Show pairing code, then paste the code here.").font(.ui(13.5)).foregroundStyle(Palette.text3)
+                    HStack {
+                        TextField("everyday-sync:1:…", text: $pairCode).textFieldStyle(.roundedBorder)
+                        Button(pairing ? "Waiting for it…" : "Set up from it") {
+                            do { try model.sync.join(pairCode); pairing = true; pairError = nil } catch { pairError = error.localizedDescription }
+                        }.buttonStyle(QuietButtonStyle()).disabled(pairCode.isEmpty || pairing)
+                    }
+                    if let e = pairError { Text(e).font(.ui(13)).foregroundStyle(Palette.alertFG) }
+                }.padding(14).background(RoundedRectangle(cornerRadius: 10).fill(Palette.raised)).padding(.top, 18)
             }
         case .you:
             VStack(alignment: .leading, spacing: 14) {

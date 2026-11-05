@@ -50,6 +50,7 @@ class AppModel(private val scope: CoroutineScope) {
     fun resetInterests() = scope.launch { Core.run("resetInterests"); Core.run("seedInterests", json("categories" to org.json.JSONArray(topics.toList()))); loadLocal(); toast("Started over from your topics") }
 
     fun toast(m: String) { message = m }
+    suspend fun reloadTopics() { topics = ((Core.run("getPref", json("key" to "categories")) as? String) ?: "").split(",").filter { it.isNotBlank() }.toSet() }
 
     fun start() = scope.launch {
         val s = Core.run("state") as JSONObject

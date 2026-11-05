@@ -57,6 +57,8 @@ fun Root() {
     val scope = rememberCoroutineScope()
     val model = remember { AppModel(scope) }
     LaunchedEffect(Unit) { model.start() }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    LaunchedEffect(Unit) { SyncLink.start(ctx); SyncLink.watch(model) }
     val p = pal()
     Box(Modifier.fillMaxSize().background(p.paper)) {
         when {

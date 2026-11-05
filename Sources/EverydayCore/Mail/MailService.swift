@@ -199,6 +199,7 @@ public final class MailService: @unchecked Sendable {
 
     public func rules() -> [MailRule] { ((try? db.all("mailRule", limit: 500, as: MailRule.self)) ?? []).sorted { $0.createdAt > $1.createdAt } }
     public func removeRule(_ r: MailRule) { try? db.delete("mailRule", id: r.id) }
+    public func handledThreadIDs() -> Set<String> { handledThreads() }
     private func handledThreads() -> Set<String> { Set(((try? db.all("handledThread", limit: 5000, as: String.self)) ?? [])) }
 
     /// "That was me": hides the conversation from attention lists and dismisses tasks suggested from it. Nothing changes in the mail account.

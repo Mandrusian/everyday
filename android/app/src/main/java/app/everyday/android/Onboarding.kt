@@ -51,7 +51,15 @@ fun Onboarding(model: AppModel) {
             }
         }
         when (step) {
-            0 -> PrimaryButton("Get started", { step = 1 })
+            0 -> Column {
+                PrimaryButton("Get started", { step = 1 })
+                val scan = androidx.activity.compose.rememberLauncherForActivityResult(com.journeyapps.barcodescanner.ScanContract()) { r -> r.contents?.let { uri -> scope.launch {
+                    try { SyncLink.status = Core.run("syncJoin", json("uri" to uri)) as org.json.JSONObject; model.toast("Paired. Fetching your setup…") } catch (e: Core.Failure) { model.toast(e.message ?: "That code didn't work.") }
+                } } }
+                TextButton({ scan.launch(com.journeyapps.barcodescanner.ScanOptions().setPrompt("On your Mac or PC: Settings → Sync → Show pairing code").setBeepEnabled(false).setOrientationLocked(false).setDesiredBarcodeFormats(com.journeyapps.barcodescanner.ScanOptions.QR_CODE)) }, Modifier.fillMaxWidth()) {
+                    Text("Set up from my other device", color = p.clay)
+                }
+            }
             1 -> PrimaryButton("Continue", { model.name = name.trim(); model.setPref("name", name.trim()); step = 2 }, enabled = name.isNotBlank())
             2 -> PrimaryButton("Continue", { model.saveTopics(); step = 3 })
             3 -> if (model.deck.isEmpty()) PrimaryButton("Continue", { step = 4 }) else TextButton({ step = 4 }, Modifier.fillMaxWidth()) { Text("Skip", color = p.text2) }

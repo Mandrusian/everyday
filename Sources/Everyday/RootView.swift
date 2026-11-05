@@ -70,46 +70,61 @@ struct SidebarView: View {
         }
     }
 
+    private var slim: Bool { model.sidebarCollapsed }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: slim ? .center : .leading, spacing: 2) {
             HStack(spacing: 0) {
-                Text("everyday").font(.serif(24, .semibold)).foregroundStyle(Palette.text)
+                Text(slim ? "e" : "everyday").font(.serif(24, .semibold)).foregroundStyle(Palette.text)
                 Text(".").font(.serif(24, .semibold)).foregroundStyle(Palette.accent)
-            }.padding(.horizontal, 10).padding(.top, 40).padding(.bottom, 16)
+                if !slim { Spacer(); collapseButton }
+            }.padding(.horizontal, slim ? 0 : 10).padding(.top, 40).padding(.bottom, slim ? 8 : 16)
+            if slim { collapseButton.padding(.bottom, 8) }
 
             ForEach(AppSection.allCases.filter { $0 != .settings }) { s in
-                SidebarRow(title: s.title, symbol: s.symbol, count: count(s), selected: model.section == s, ns: selection) { model.section = s }
+                SidebarRow(title: s.title, symbol: s.symbol, count: count(s), selected: model.section == s, ns: selection, slim: slim) { model.section = s }
             }
 
-            Text("FOCUS").font(.ui(12, .semibold)).tracking(1.4).foregroundStyle(Palette.text3).padding(.horizontal, 10).padding(.top, 22).padding(.bottom, 4)
-            focus("Needs reply", .needsReply, Palette.accent, model.rows.filter { $0.triage?.needsReply == true }.count)
-            focus("Deadlines", .deadlines, Palette.alertFG, model.rows.filter { $0.triage?.deadline != nil }.count)
-            focus("Newsletters", .newsletters, Palette.text3, model.rows.filter { $0.triage?.category == .newsletter }.count)
+            if slim {
+                Hairline().frame(width: 28).padding(.vertical, 12)
+                focus("Needs reply", .needsReply, Palette.accent, model.rows.filter { $0.triage?.needsReply == true }.count)
+                focus("Deadlines", .deadlines, Palette.alertFG, model.rows.filter { $0.triage?.deadline != nil }.count)
+                focus("Newsletters", .newsletters, Palette.text3, model.rows.filter { $0.triage?.category == .newsletter }.count)
+            } else {
+                Text("FOCUS").font(.ui(12, .semibold)).tracking(1.4).foregroundStyle(Palette.text3).padding(.horizontal, 10).padding(.top, 22).padding(.bottom, 4)
+                focus("Needs reply", .needsReply, Palette.accent, model.rows.filter { $0.triage?.needsReply == true }.count)
+                focus("Deadlines", .deadlines, Palette.alertFG, model.rows.filter { $0.triage?.deadline != nil }.count)
+                focus("Newsletters", .newsletters, Palette.text3, model.rows.filter { $0.triage?.category == .newsletter }.count)
+            }
 
             Spacer()
-            SidebarRow(title: "Settings", symbol: AppSection.settings.symbol, count: 0, selected: model.section == .settings, ns: selection) { model.section = .settings }
+            SidebarRow(title: "Settings", symbol: AppSection.settings.symbol, count: 0, selected: model.section == .settings, ns: selection, slim: slim) { model.section = .settings }
             Button { model.showAssistant.toggle() } label: {
                 HStack(spacing: 10) {
                     Image(systemName: "bubble.left").font(.system(size: 14))
-                    Text("Ask everyday.").font(.ui(15))
-                    Spacer()
-                    Text("⌘K").font(.ui(13)).foregroundStyle(Palette.text3)
-                }.foregroundStyle(Palette.text).padding(.horizontal, 12).frame(height: 38)
+                    if !slim {
+                        Text("Ask everyday.").font(.ui(15))
+                        Spacer()
+                        Text("⌘K").font(.ui(13)).foregroundStyle(Palette.text3)
+                    }
+                }.foregroundStyle(Palette.text).padding(.horizontal, slim ? 0 : 12).frame(width: slim ? 38 : nil, height: 38)
                 .background(RoundedRectangle(cornerRadius: 8).fill(Palette.raised)).overlay(RoundedRectangle(cornerRadius: 8).stroke(Palette.line))
-            }.buttonStyle(.plain).padding(.top, 8)
+            }.buttonStyle(.plain).padding(.top, 8).help("Ask everyday. (⌘K)")
 
             Button { if model.mail.isConnected { Task { await model.syncMail() } } else { model.settingsPane = .accounts; model.section = .settings } } label: {
             HStack(spacing: 10) {
                 Circle().fill(model.mailError != nil ? Palette.alertBG : Palette.control).frame(width: 28, height: 28).overlay(Text(String(model.userName.prefix(1)).uppercased()).font(.ui(14)).foregroundStyle(Palette.text))
-                VStack(alignment: .leading, spacing: 0) {
+                if !slim { VStack(alignment: .leading, spacing: 0) {
                     Text(model.mail.accountEmails.count > 1 ? "\(model.mail.accountEmails.count) mail accounts" : (model.mail.accountEmail ?? "No mail account")).font(.ui(13.5)).foregroundStyle(Palette.text).lineLimit(1)
                     Text(statusLine).font(.ui(12.5)).foregroundStyle(model.mailError != nil ? Palette.alertFG : Palette.text3).lineLimit(1)
-                }
+                } }
             }.contentShape(Rectangle())
-            }.buttonStyle(.plain).help(model.mailError ?? "Sync now").padding(.horizontal, 8).padding(.top, 12)
+            }.buttonStyle(.plain).help(model.mailError ?? (slim ? statusLine : "Sync now")).padding(.horizontal, slim ? 0 : 8).padding(.top, 12)
         }
-        .padding(.horizontal, 10).padding(.bottom, 14)
-        .frame(width: 232).frame(maxHeight: .infinity)
+        .padding(.horizontal, slim ? 8 : 10).padding(.bottom, 14)
+        .frame(width: slim ? 64 : 232).frame(maxHeight: .infinity)
+        .clipped()
+        .animation(Motion.snappy, value: slim)
         .paper(Palette.sidebar)
         .overlay(alignment: .trailing) { Hairline(vertical: true) }
     }
@@ -121,7 +136,24 @@ struct SidebarView: View {
         return model.mail.isConnected ? "Not synced yet" : "Connect mail in Settings"
     }
 
-    private func focus(_ title: String, _ f: InboxFilter, _ color: Color, _ n: Int) -> some View {
+    /// Shrinks the sidebar to icons (⌃⌘S, the standard Mac shortcut).
+    private var collapseButton: some View {
+        Button { model.sidebarCollapsed.toggle() } label: {
+            Image(systemName: "sidebar.left").font(.system(size: 13)).foregroundStyle(Palette.text3).frame(width: 26, height: 26).contentShape(Rectangle())
+        }.buttonStyle(.plain).keyboardShortcut("s", modifiers: [.control, .command])
+        .help(slim ? "Expand the sidebar (⌃⌘S)" : "Collapse the sidebar to icons (⌃⌘S)")
+        .accessibilityLabel(slim ? "Expand sidebar" : "Collapse sidebar")
+    }
+
+    @ViewBuilder private func focus(_ title: String, _ f: InboxFilter, _ color: Color, _ n: Int) -> some View {
+        if slim {
+            Button { model.inboxFilter = f; model.section = .inbox } label: {
+                ZStack(alignment: .topTrailing) {
+                    Circle().fill(color).frame(width: 9, height: 9).frame(width: 38, height: 30)
+                    if n > 0 { Text("\(n)").font(.ui(10.5, .semibold)).foregroundStyle(Palette.text3).offset(x: -2, y: 1) }
+                }.contentShape(Rectangle())
+            }.buttonStyle(.plain).help("\(title): \(n)").accessibilityLabel("\(title), \(n)")
+        } else {
         Button { model.inboxFilter = f; model.section = .inbox } label: {
             HStack(spacing: 10) {
                 Circle().fill(color).frame(width: 7, height: 7).padding(.horizontal, 5)
@@ -130,26 +162,33 @@ struct SidebarView: View {
                 Text("\(n)").font(.ui(13)).foregroundStyle(Palette.text3)
             }.frame(height: 30).padding(.horizontal, 6).contentShape(Rectangle())
         }.buttonStyle(.plain)
+        }
     }
 }
 
 struct SidebarRow: View {
-    let title: String, symbol: String, count: Int, selected: Bool, ns: Namespace.ID, action: () -> Void
+    let title: String, symbol: String, count: Int, selected: Bool, ns: Namespace.ID
+    var slim = false
+    let action: () -> Void
     @Local private var hover = false
     var body: some View {
         Button(action: action) {
             HStack(spacing: 10) {
                 Image(systemName: symbol).font(.system(size: 14)).frame(width: 20)
-                Text(title).font(.ui(16, selected ? .semibold : .regular))
-                Spacer()
-                if count > 0 { Text("\(count)").font(.ui(13)).foregroundStyle(Palette.text3) }
+                    .overlay(alignment: .topTrailing) { if slim && count > 0 { Circle().fill(Palette.accent).frame(width: 6, height: 6).offset(x: 4, y: -2) } }
+                if !slim {
+                    Text(title).font(.ui(16, selected ? .semibold : .regular))
+                    Spacer()
+                    if count > 0 { Text("\(count)").font(.ui(13)).foregroundStyle(Palette.text3) }
+                }
             }
             .foregroundStyle(selected ? Palette.text : Palette.text2)
-            .padding(.horizontal, 10).frame(height: 34)
+            .padding(.horizontal, slim ? 0 : 10).frame(width: slim ? 42 : nil, height: 34)
             .background { ZStack { if hover && !selected { RoundedRectangle(cornerRadius: 7).fill(Palette.raised) }; if selected { RoundedRectangle(cornerRadius: 7).fill(Palette.control).matchedGeometryEffect(id: "sel", in: ns) } } }
             .animation(Motion.snappy, value: selected)
             .contentShape(Rectangle())
         }.buttonStyle(.plain).onHover { hover = $0 }
+        .help(slim ? (count > 0 ? "\(title) (\(count))" : title) : "")
         .accessibilityLabel(title)
     }
 }

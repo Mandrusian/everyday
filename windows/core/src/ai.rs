@@ -243,6 +243,10 @@ mod tests {
         std::thread::spawn(move || { for s in listener.incoming() { let Ok(mut s) = s else { continue };
             let mut req = Vec::new(); let mut buf = [0u8; 4096];
             while !req.windows(4).any(|w| w == b"\r\n\r\n") { match s.read(&mut buf) { Ok(0) | Err(_) => break, Ok(n) => req.extend_from_slice(&buf[..n]) } }
+            // Read the body too: closing with unread data makes Windows reset the connection before the client sees the reply.
+            let head_end = req.windows(4).position(|w| w == b"\r\n\r\n").map(|p| p + 4).unwrap_or(req.len());
+            let len = String::from_utf8_lossy(&req[..head_end]).to_lowercase().lines().find_map(|l| l.strip_prefix("content-length:").and_then(|v| v.trim().parse::<usize>().ok())).unwrap_or(0);
+            while req.len() < head_end + len { match s.read(&mut buf) { Ok(0) | Err(_) => break, Ok(n) => req.extend_from_slice(&buf[..n]) } }
             if String::from_utf8_lossy(&req).to_lowercase().contains("authorization: bearer k") { flag.store(true, std::sync::atomic::Ordering::SeqCst); }
             let body = r#"{"choices":[{"message":{"content":"pong"}}]}"#;
             let _ = write!(s, "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}", body.len(), body); } });

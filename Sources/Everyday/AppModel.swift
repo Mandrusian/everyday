@@ -37,6 +37,10 @@ final class AppModel {
     let interests: InterestModel
     let news: NewsService
     let tasks: TaskStore
+    let sync: SyncHost
+    var syncTick = 0
+    /// Sidebar shrunk to icons, like the Windows app. Remembered between launches.
+    var sidebarCollapsed = Prefs.shared.bool("sidebar.collapsed", default: false) { didSet { prefs.set(sidebarCollapsed, "sidebar.collapsed") } }
     let weather: WeatherService
     let calendar = CalendarService()
     let briefingService: BriefingService
@@ -96,12 +100,22 @@ final class AppModel {
         interests = InterestModel(db: database)
         news = NewsService(db: database, interests: interests)
         tasks = TaskStore(db: database)
+        sync = SyncHost(data: SyncData(db: database, tasks: tasks, mail: mail, prefs: .shared))
         weather = WeatherService(db: database)
         context = ContextBuilder(mail: mail, tasks: tasks, news: news, weather: weather, calendar: calendar)
         briefingService = BriefingService(db: database, intelligence: intel, context: context)
         showOnboarding = !Prefs.shared.bool(Prefs.Key.onboarded)
         reloadLocal()
         chat = (try? database.all("chat", limit: 200, as: ChatMessage.self))?.sorted { $0.date < $1.date } ?? []
+        // Wi‑Fi sync with paired devices: reload what other devices changed.
+        sync.onChange = { [weak self] in Task { @MainActor in self?.reloadLocal(); self?.reloadTasks(); self?.scheduleTaskNotifications() } }
+        sync.onStatus = { [weak self] in Task { @MainActor in self?.syncTick += 1 } }
+        sync.onSetup = { [weak self] msg in Task { @MainActor in
+            guard let self else { return }
+            self.showOnboarding = false; self.say(msg); self.reloadLocal()
+            await self.syncMail()
+        } }
+        sync.start()
     }
 
     // MARK: Banner
@@ -200,7 +214,7 @@ final class AppModel {
         }
     }
 
-    func reloadTasks() { let o = tasks.open(), d = tasks.completed(), s = mail.suggestions(); animated { openTasks = o; doneTasks = d; suggestions = s }; updateWidgets() }
+    func reloadTasks() { let o = tasks.open(), d = tasks.completed(), s = mail.suggestions(); animated { openTasks = o; doneTasks = d; suggestions = s }; updateWidgets(); sync.syncNow() }
     func reloadNews() { let st = news.stories(limit: 80), sv = news.savedArticles(); animated { stories = st; savedArticles = sv } }
 
     // MARK: Lifecycle
@@ -639,7 +653,7 @@ final class AppModel {
 }
 
 enum SettingsPane: String, CaseIterable, Identifiable {
-    case general = "General", briefing = "Briefing", voice = "Voice", accounts = "Accounts", ai = "AI provider", sources = "News sources", interests = "Interests", privacy = "Privacy", notifications = "Notifications", appearance = "Appearance", widgets = "Widgets", advanced = "Advanced"
+    case general = "General", briefing = "Briefing", voice = "Voice", accounts = "Accounts", ai = "AI provider", sources = "News sources", interests = "Interests", privacy = "Privacy", notifications = "Notifications", appearance = "Appearance", widgets = "Widgets", sync = "Sync", advanced = "Advanced"
     var id: String { rawValue }
 }
 
