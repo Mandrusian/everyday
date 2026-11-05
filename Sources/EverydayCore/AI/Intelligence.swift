@@ -31,6 +31,7 @@ public final class Intelligence: @unchecked Sendable {
         let system = """
         You triage a personal inbox. Now is \(Self.dateString(Date())). \(Self.guardrail)
         For each email return an object with: id (copy exactly), category (one of: important, needsReply, deadline, actionItem, newsletter, promo, spamSuspect, fyi), priority (0-100; 80+ only for things that need attention today or have hard deadlines), summary (one plain sentence, under 140 characters, no preamble), deadline (ISO 8601 date-time if the email states or clearly implies a deadline, else null), actionItems (array of short imperative to-dos the recipient must do, empty if none), needsReply (true only if a person is waiting on a human reply).
+        A deadline is a date the recipient must act by (pay, sign, submit, reply, renew). Automated notices such as build or CI results, sign-in alerts, receipts, shipping updates and status reports have no deadline even when they contain timestamps; the time something happened or finished is never a deadline. Marketing dates (sales, webinars, offers ending) are not deadlines either.
         Bulk mail, marketing and receipts are newsletter, promo or fyi with low priority. Output a JSON array only.
         """
         let text = try await ai.complete(.triage, label: "Triage \(messages.count) emails", AIRequest(system: system, messages: [AIMessage(.user, items)], maxTokens: 2500, temperature: 0.1, json: true))
@@ -39,9 +40,12 @@ public final class Intelligence: @unchecked Sendable {
         let isoDay = ISO8601DateFormatter(); isoDay.formatOptions = [.withFullDate]
         return arr.compactMap { o -> Triage? in
             guard let id = o["id"] as? String, messages.contains(where: { $0.id == id }) else { return nil }
-            let cat = TriageCategory(rawValue: o["category"] as? String ?? "") ?? .fyi
+            var cat = TriageCategory(rawValue: o["category"] as? String ?? "") ?? .fyi
             var dl: Date?
             if let s = o["deadline"] as? String, !s.isEmpty { dl = iso.date(from: s) ?? isoDay.date(from: String(s.prefix(10))) }
+            // A "deadline" at or just after the send time is a timestamp the model copied (a build finished, a sign-in happened), not a due date.
+            if let d = dl, let sent = messages.first(where: { $0.id == id })?.date, d < sent.addingTimeInterval(12 * 3600) { dl = nil }
+            if cat == .deadline && dl == nil { cat = .fyi }
             let pr = max(0, min(100, (o["priority"] as? Int) ?? Int((o["priority"] as? Double) ?? 30)))
             return Triage(messageId: id, category: cat, priority: pr, summary: (o["summary"] as? String) ?? "", deadline: dl,
                           actionItems: (o["actionItems"] as? [String]) ?? [], needsReply: (o["needsReply"] as? Bool) ?? (cat == .needsReply))

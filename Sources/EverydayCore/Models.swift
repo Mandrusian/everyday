@@ -62,7 +62,7 @@ public struct Triage: Codable, Hashable, Sendable {
         self.messageId = messageId; self.category = category; self.priority = priority; self.summary = summary
         self.deadline = deadline; self.actionItems = actionItems; self.needsReply = needsReply; self.promptVersion = promptVersion
     }
-    public static let currentPromptVersion = 1
+    public static let currentPromptVersion = 2
 }
 
 public struct ThreadSummary: Codable, Hashable, Sendable {
