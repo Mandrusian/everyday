@@ -30,4 +30,5 @@ identifier = "app.everyday.windows"
 icons = ["../app/icons/icon.ico", "../app/icons/icon.png"]
 formats = ["nsis", "wix"]
 out-dir = "../target/packages"
+before-packaging-command = "cargo build --release -p everyday-desktop"
 binaries = [{ path = "everyday", main = true }]
