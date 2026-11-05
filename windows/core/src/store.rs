@@ -29,6 +29,12 @@ impl Store {
         let rows = st.query_map(params![kind, limit as i64], |r| r.get::<_, String>(0));
         match rows { Ok(it) => it.filter_map(|j| j.ok()).filter_map(|j| serde_json::from_str(&j).ok()).collect(), Err(_) => vec![] }
     }
+    /// All document IDs without decoding or loading potentially large message bodies.
+    pub fn ids(&self, kind: &str) -> rusqlite::Result<Vec<String>> {
+        let mut st = self.conn.prepare("SELECT id FROM docs WHERE kind=?1")?;
+        let rows = st.query_map(params![kind], |r| r.get(0))?;
+        rows.collect()
+    }
     pub fn all_where<T: DeserializeOwned>(&self, kind: &str, field: &str, equals: &str) -> Vec<T> {
         let mut st = match self.conn.prepare("SELECT json FROM docs WHERE kind=?1 AND json_extract(json, ?2)=?3") { Ok(s) => s, Err(_) => return vec![] };
         let path = format!("$.{field}");

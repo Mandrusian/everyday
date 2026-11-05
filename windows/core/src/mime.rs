@@ -7,6 +7,7 @@ pub struct ParsedMail {
     pub subject: String, pub from_name: String, pub from_address: String, pub to: String,
     pub message_id: String, pub in_reply_to: String, pub references: Vec<String>,
     pub body: String, pub attachment_names: Vec<String>, pub list_unsubscribe: Option<String>,
+    pub date: Option<i64>,
 }
 
 impl ParsedMail {
@@ -28,6 +29,7 @@ pub fn parse(raw: &[u8]) -> ParsedMail {
     let Some(m) = MessageParser::default().parse(raw) else { return ParsedMail::default() };
     let mut p = ParsedMail::default();
     p.subject = m.subject().unwrap_or("").to_string();
+    p.date = m.date().filter(|d| d.is_valid()).map(|d| d.to_timestamp());
     if let Some(a) = m.from().and_then(|f| f.first()) { p.from_name = a.name().unwrap_or("").to_string(); p.from_address = a.address().unwrap_or("").to_string(); }
     p.to = m.to().map(|t| t.iter().filter_map(|a| a.address()).collect::<Vec<_>>().join(", ")).unwrap_or_default();
     p.message_id = m.message_id().unwrap_or("").to_string();

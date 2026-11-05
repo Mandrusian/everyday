@@ -21,8 +21,16 @@ DMG=build/everyday-$VERSION.dmg
 ENT=Resources/everyday.entitlements
 
 echo "▸ Checks"
-swift build --product EverydayChecks 2>&1 | grep -E "error" && exit 1 || true
-./.build/out/Products/Debug/EverydayChecks 2>&1 | tail -1 | grep -q "ALL CHECKS PASSED" || { echo "Checks failed; not releasing."; exit 1; }
+CHECK_LOG=$(mktemp)
+# Build and run the current checks together; never fall back to an old executable after a build failure.
+if ! swift run EverydayChecks >"$CHECK_LOG" 2>&1 || ! tail -1 "$CHECK_LOG" | grep -qx "ALL CHECKS PASSED"; then
+  cat "$CHECK_LOG"
+  rm -f "$CHECK_LOG"
+  echo "Checks failed; not releasing."
+  exit 1
+fi
+tail -1 "$CHECK_LOG"
+rm -f "$CHECK_LOG"
 
 echo "▸ Build $VERSION"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" Resources/Info.plist

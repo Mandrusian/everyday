@@ -27,12 +27,16 @@ pub struct SyncReport { pub added: usize, pub removed: usize, pub flag_changes: 
 pub fn sync<S: Read + Write>(c: &mut Imap<S>, store: &Store, now: i64) -> Result<SyncReport, ImapError> {
     let (validity, _) = c.select("INBOX")?;
     let mut known: Vec<StoredEmail> = store.all("email", 5000);
-    if known.iter().any(|m| parse_id(&m.id).map_or(false, |(v, _)| v != validity)) {     // the mailbox was rebuilt on the server: start over
-        for m in &known { let _ = store.delete("email", &m.id); } known.clear();
+    // Read every ID without loading every body; a display-page limit must not cause repeated downloads.
+    let mut known_ids = store.ids("email").map_err(|e| ImapError::Io(e.to_string()))?;
+    if known_ids.iter().any(|id| parse_id(id).map_or(false, |(v, _)| v != validity)) {     // the mailbox was rebuilt on the server: start over
+        store.delete_all("email").map_err(|e| ImapError::Io(e.to_string()))?;
+        known.clear(); known_ids.clear();
     }
-    let last = known.iter().filter_map(|m| parse_id(&m.id).map(|(_, u)| u)).max().unwrap_or(0);
-    let mut uids = c.uid_search(if last == 0 { "ALL" } else { "ALL" })?;
-    uids.retain(|u| *u > last); uids.sort_unstable_by(|a, b| b.cmp(a)); uids.truncate(150);
+    let stored_uids: std::collections::HashSet<u32> = known_ids.iter().filter_map(|id| parse_id(id).map(|(_, u)| u)).collect();
+    let mut uids = c.uid_search("ALL")?;
+    // Newest first, but backfill gaps on later syncs instead of treating the highest UID as a watermark.
+    uids.retain(|u| !stored_uids.contains(u)); uids.sort_unstable_by(|a, b| b.cmp(a)); uids.dedup(); uids.truncate(150);
     let mut report = SyncReport::default();
     for chunk in uids.chunks(8) {
         for f in c.uid_fetch(chunk, 400_000)? {
@@ -41,7 +45,7 @@ pub fn sync<S: Read + Write>(c: &mut Imap<S>, store: &Store, now: i64) -> Result
             let snippet: String = body.replace('\n', " ").split_whitespace().collect::<Vec<_>>().join(" ").chars().take(160).collect();
             let thread = format!("t{}", fnv_short(&p.thread_key()));
             let m = StoredEmail { id: make_id(validity, f.uid), thread_id: thread, from_name: if p.from_name.is_empty() { p.from_address.clone() } else { p.from_name.clone() }, from_address: p.from_address.clone(),
-                subject: if p.subject.is_empty() { "(no subject)".into() } else { p.subject.clone() }, snippet, body, date: now, unread: !f.flags.contains(&"\\seen".to_string()),
+                subject: if p.subject.is_empty() { "(no subject)".into() } else { p.subject.clone() }, snippet, body, date: p.date.unwrap_or(now), unread: !f.flags.contains(&"\\seen".to_string()),
                 attachment_names: p.attachment_names.clone(), list_unsubscribe: p.list_unsubscribe.clone() };
             store.put("email", &m.id, m.date as f64, &m).map_err(|e| ImapError::Io(e.to_string()))?; report.added += 1;
         }
@@ -86,6 +90,31 @@ mod tests {
         assert_eq!(store.all::<StoredEmail>("email", 10).len(), 3);
     }
     #[test] fn ids_round_trip() { assert_eq!(parse_id(&make_id(7, 42)), Some((7, 42))); assert_eq!(parse_id("gmail:1"), None); }
+    #[test] fn large_mailboxes_backfill_across_syncs_without_skipping_old_messages() {
+        let (port, st) = serve(); let store = Store::open(None).unwrap();
+        for uid in 1..=160 {
+            st.lock().unwrap().msgs.push(Msg { uid, flags: vec![], raw: raw(&format!("Mail {uid}"), "") });
+        }
+        let mut c = open(port);
+        assert_eq!(sync(&mut c, &store, 100).unwrap().added, 150);
+        assert!(store.get::<StoredEmail>("email", &make_id(7, 160)).is_some());
+        assert!(store.get::<StoredEmail>("email", &make_id(7, 1)).is_none());
+        assert_eq!(sync(&mut c, &store, 101).unwrap().added, 10);
+        assert_eq!(store.all::<StoredEmail>("email", 200).len(), 160);
+        assert_eq!(sync(&mut c, &store, 102).unwrap(), SyncReport::default());
+    }
+    #[test] fn sync_preserves_message_dates_and_falls_back_only_when_missing() {
+        let (port, st) = serve(); let store = Store::open(None).unwrap();
+        let date = "Thu, 05 Nov 2026 08:30:00 +1000";
+        st.lock().unwrap().msgs.push(Msg { uid: 1, flags: vec![], raw: format!("Date: {date}\r\n{}", raw("Dated", "")) });
+        st.lock().unwrap().msgs.push(Msg { uid: 2, flags: vec![], raw: raw("Undated", "") });
+        let mut c = open(port);
+        sync(&mut c, &store, 123).unwrap();
+        let dated: StoredEmail = store.get("email", &make_id(7, 1)).unwrap();
+        assert_eq!(dated.date, chrono::DateTime::parse_from_rfc2822(date).unwrap().timestamp());
+        let undated: StoredEmail = store.get("email", &make_id(7, 2)).unwrap();
+        assert_eq!(undated.date, 123);
+    }
     #[test] fn old_stored_mail_without_new_fields_still_loads() {
         let store = Store::open(None).unwrap();
         store.put("email", "old", 0.0, &serde_json::json!({"id":"old","threadId":"t","from_name":"A","from_address":"a@b.c","subject":"s","snippet":"","body":"","date":0,"unread":true})).unwrap();
