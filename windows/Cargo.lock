@@ -819,6 +819,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "everyday-mobile"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "chrono",
+ "everyday-core",
+ "jni",
+ "once_cell",
+ "serde",
+ "serde_json",
+ "ureq",
+]
+
+[[package]]
 name = "fallible-iterator"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

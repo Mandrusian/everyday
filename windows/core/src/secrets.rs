@@ -20,6 +20,10 @@ impl SecretStore for OsSecrets {
 /// For tests and previews: nothing touches the real store.
 #[derive(Default)]
 pub struct MemorySecrets(std::sync::Mutex<std::collections::HashMap<String, String>>);
+impl MemorySecrets {
+    /// Every key and value held, for handing changed secrets back to a platform store (Android).
+    pub fn entries(&self) -> Vec<(String, String)> { self.0.lock().unwrap().iter().map(|(k, v)| (k.clone(), v.clone())).collect() }
+}
 impl SecretStore for MemorySecrets {
     fn get(&self, key: &str) -> Option<String> { self.0.lock().unwrap().get(key).cloned() }
     fn set(&self, key: &str, value: &str) -> Result<(), String> { self.0.lock().unwrap().insert(key.into(), value.into()); Ok(()) }

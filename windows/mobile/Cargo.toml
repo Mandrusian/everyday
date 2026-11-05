@@ -1,0 +1,19 @@
+[package]
+name = "everyday-mobile"
+version = "0.1.0"
+edition = "2021"
+description = "everyday. for Android: the Rust core behind one JNI call. The Kotlin app keeps secrets in the Android Keystore and passes them in."
+
+[lib]
+name = "everyday_mobile"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+everyday-core = { path = "../core" }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ureq = { version = "2", features = ["json"] }
+base64 = "0.22"
+jni = { version = "0.21", default-features = false }
+once_cell = "1"
