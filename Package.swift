@@ -21,7 +21,14 @@ let package = Package(
         .executableTarget(
             name: "EverydayWidgets",
             swiftSettings: [.unsafeFlags(["-application-extension"])],
-            linkerSettings: [.unsafeFlags(["-Xlinker", "-application_extension"])]
+            // Start Apple's extension runtime before it calls the Swift @main entry.
+            // Entering WidgetBundle.main directly traps in ExtensionFoundation on macOS 27.
+            // Keep _main even in release builds: NSExtensionMain discovers it via __swift5_entry.
+            linkerSettings: [.unsafeFlags([
+                "-Xlinker", "-application_extension",
+                "-Xlinker", "-e", "-Xlinker", "_NSExtensionMain",
+                "-Xlinker", "-u", "-Xlinker", "_main",
+            ])]
         ),
         .executableTarget(
             name: "EverydayChecks",

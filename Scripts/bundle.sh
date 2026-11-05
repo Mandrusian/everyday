@@ -4,7 +4,13 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 CONFIG=${1:-debug}
 swift build -c $CONFIG --product Everyday 2>&1 | grep -E "error|Compiling|Build" | tail -5
-swift build -c $CONFIG --product EverydayWidgets 2>&1 | grep -E "error" | tail -5 || true
+WIDGET_LOG=$(mktemp)
+if ! swift build -c $CONFIG --product EverydayWidgets >"$WIDGET_LOG" 2>&1; then
+  cat "$WIDGET_LOG"
+  rm -f "$WIDGET_LOG"
+  exit 1
+fi
+rm -f "$WIDGET_LOG"
 BIN=$(swift build -c $CONFIG --show-bin-path)/Everyday
 APP=build/everyday.app
 rm -rf $APP
@@ -27,6 +33,8 @@ mkdir -p $APPEX/Contents/MacOS
 cp $(swift build -c $CONFIG --show-bin-path)/EverydayWidgets $APPEX/Contents/MacOS/EverydayWidgets
 cp Resources/Widgets-Info.plist $APPEX/Contents/Info.plist
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Resources/Info.plist)" $APPEX/Contents/Info.plist
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' Resources/Info.plist)" $APPEX/Contents/Info.plist
 codesign --force --sign - --entitlements Resources/widgets.entitlements $APPEX
 codesign --force --sign - $APP
+python3 Scripts/check-widgets.py "$APP"
 echo "Built $APP"
