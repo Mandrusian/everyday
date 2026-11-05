@@ -8,3 +8,8 @@ promo/**/frames/
 roast_video/
 *.dmg
 .playwright-mcp/
+
+# Local secrets (see .env.example)
+.env
+.env.*
+!.env.example
