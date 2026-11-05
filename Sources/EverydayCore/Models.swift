@@ -128,9 +128,21 @@ public struct TaskSuggestion: Codable, Identifiable, Hashable, Sendable {
 
 public enum NewsCategory: String, Codable, CaseIterable, Sendable, Identifiable {
     case politics, technology, ai, science, gaming, business, world, aviation, entertainment, australia
+    case health, climate, space, sport, economy, design, music, film, books, food, travel
     public var id: String { rawValue }
     public var title: String {
         switch self {
+        case .health: "Health"
+        case .climate: "Climate and environment"
+        case .space: "Space"
+        case .sport: "Sport"
+        case .economy: "Economy"
+        case .design: "Design and architecture"
+        case .music: "Music"
+        case .film: "Film and TV"
+        case .books: "Books"
+        case .food: "Food"
+        case .travel: "Travel"
         case .politics: "Politics"
         case .technology: "Technology"
         case .ai: "AI"

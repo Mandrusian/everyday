@@ -77,4 +77,9 @@ jobs:
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${{ github.ref_name }}" dist/**/* dist/* --repo "${{ github.repository }}" --title "everyday. ${{ github.ref_name }}" --notes "Unsigned Windows build. Windows SmartScreen will warn until the installer is code-signed." || gh release upload "${{ github.ref_name }}" dist/**/* --repo "${{ github.repository }}"
+        # Only files: the artifact keeps the installers in nsis/ and msi/ folders.
+        run: |
+          mapfile -t files < <(find dist -type f)
+          gh release view "${{ github.ref_name }}" --repo "${{ github.repository }}" >/dev/null 2>&1 \
+            && gh release upload "${{ github.ref_name }}" "${files[@]}" --clobber --repo "${{ github.repository }}" \
+            || gh release create "${{ github.ref_name }}" "${files[@]}" --repo "${{ github.repository }}" --title "everyday. ${{ github.ref_name }}" --notes "Unsigned Windows build. Windows SmartScreen will warn until the installer is code-signed."

@@ -5,11 +5,14 @@ import EverydayCore
 struct NewsView: View {
     @Environment(AppModel.self) private var model
     @Local private var category: NewsCategory?
+    @Local private var topic: String?
 
     private var list: [Story] {
+        if let t = topic { return model.news.stories(topic: t, limit: 80) }
         guard let c = category else { return model.stories }
         return model.news.stories(category: c, limit: 80)
     }
+    private var topics: [String] { model.prefs.strings(Prefs.Key.followedTopics) }
     private var selected: Story? { list.first { $0.id == model.selectedStoryID } ?? model.stories.first { $0.id == model.selectedStoryID } }
 
     var body: some View {
@@ -21,8 +24,9 @@ struct NewsView: View {
                 }
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
-                        Button("All") { category = nil }.buttonStyle(QuietButtonStyle(compact: true, selected: category == nil))
-                        ForEach(chosen, id: \.self) { c in Button(c.title) { category = c }.buttonStyle(QuietButtonStyle(compact: true, selected: category == c)) }
+                        Button("All") { category = nil; topic = nil }.buttonStyle(QuietButtonStyle(compact: true, selected: category == nil && topic == nil))
+                        ForEach(topics, id: \.self) { t in Button { topic = t; category = nil } label: { Label(t, systemImage: "number") }.buttonStyle(QuietButtonStyle(compact: true, selected: topic == t)) }
+                        ForEach(chosen, id: \.self) { c in Button(c.title) { category = c; topic = nil }.buttonStyle(QuietButtonStyle(compact: true, selected: category == c)) }
                     }.padding(.horizontal, 20).padding(.vertical, 12)
                 }
                 Hairline()

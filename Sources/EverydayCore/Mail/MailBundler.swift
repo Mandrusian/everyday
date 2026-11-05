@@ -27,6 +27,15 @@ public enum InboxItem: Identifiable, Hashable, Sendable {
 public enum MailBundler {
     static let automatedLocal = try! NSRegularExpression(pattern: #"^(no[-_.]?reply|do[-_.]?not[-_.]?reply|notifications?|alerts?|security|mailer|mailer-daemon|updates?|news|newsletter|hello|team|info|support|billing|receipts?|digest|account|accounts)([-_.+].*)?$"#, options: [.caseInsensitive])
 
+    /// Account-security notices the reader most likely caused themselves: sign-ins, new devices, passwords, app access.
+    /// Only these get a prominent "That was me"; everything else keeps it in a menu.
+    static let securityPattern = try! NSRegularExpression(pattern: #"(security alert|sign[- ]?in|signed in|new (device|login|sign)|log[- ]?in (attempt|from)|password (was )?(changed|reset|created|removed)|app password|2-step|two[- ]factor|verification code|one[- ]time (code|passcode)|access (was )?granted|(granted|given) access|connected to your (google )?account|(oauth|third[- ]party) app|personal access token|recovery (email|phone)|passkey)"#, options: .caseInsensitive)
+    public static func isSecurityNotice(_ m: EmailMessage) -> Bool {
+        guard m.fromAddress.contains("@") else { return false }
+        let text = m.subject + " " + m.snippet
+        return securityPattern.firstMatch(in: text, range: NSRange(location: 0, length: (text as NSString).length)) != nil
+    }
+
     /// True for mail sent by a system rather than a person.
     public static func isAutomated(_ m: EmailMessage, category: TriageCategory?) -> Bool {
         if let c = category, c == .newsletter || c == .promo { return true }

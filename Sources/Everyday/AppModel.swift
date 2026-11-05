@@ -1,4 +1,5 @@
 import SwiftUI
+import WidgetKit
 import AppKit
 import UserNotifications
 import EverydayCore
@@ -126,6 +127,7 @@ final class AppModel {
         weatherNow = weather.cached()
         briefing = briefingService.latest().map { briefingService.scrubbed($0) }
         events = calendar.upcoming()
+        updateWidgets()
     }
 
     private var mailReloadGeneration = 0
@@ -142,7 +144,49 @@ final class AppModel {
         guard gen == mailReloadGeneration else { return }   // a newer reload is already on its way
         animated { rows = r; suggestions = s }
     }
-    func reloadTasks() { let o = tasks.open(), d = tasks.completed(), s = mail.suggestions(); animated { openTasks = o; doneTasks = d; suggestions = s } }
+    // MARK: Desktop widgets
+
+    private var widgetWrite: Task<Void, Never>?
+    /// Writes what the widgets show and asks macOS to redraw them. Debounced so a burst of changes writes once.
+    func updateWidgets() {
+        widgetWrite?.cancel()
+        widgetWrite = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 600_000_000)
+            guard !Task.isCancelled else { return }
+            var s = WidgetSnapshot()
+            s.name = userName
+            if let w = weatherNow {
+                s.weather = .init(city: w.city, temp: w.temperature, condition: w.condition, high: w.high, low: w.low,
+                                  hours: w.hourly.filter { $0.date > Date() }.enumerated().filter { $0.offset % 3 == 0 }.prefix(5).map { .init(date: $0.element.date, temp: $0.element.temp) })
+            }
+            s.events = events.prefix(8).map { .init(title: $0.title, start: $0.start, allDay: $0.isAllDay) }
+            if let b = briefing { s.brief = WidgetSnapshot.shortBrief(b.text) }
+            let att = rows.filter(MailService.isAttention)
+            s.needsCount = att.count
+            s.needsYou = att.prefix(3).map { .init(who: $0.message.fromName, what: $0.triage?.summary.isEmpty == false ? $0.triage!.summary : $0.message.subject) }
+            s.stories = stories.prefix(6).map { .init(title: $0.lead.title, source: $0.lead.source) }
+            s.tasks = openTasks.prefix(6).map { .init(title: $0.title, due: $0.due) }
+            s.quote = (try? db.get("quote", id: Self.quoteKey(prefs)) as WidgetSnapshot.Quote?) ?? nil
+            try? s.write()
+            WidgetCenter.shared.reloadAllTimelines()
+        }
+    }
+
+    static func quoteKey(_ prefs: Prefs) -> String { BriefingSchedule.dayKey(Date()) + "|" + prefs.string(Prefs.Key.quoteTopic, default: "Stoicism").lowercased() }
+
+    /// One quote a day on the reader's topic. Kept until the day or the topic changes.
+    func refreshQuote(force: Bool = false) async {
+        guard ai.isConfigured else { return }
+        let key = Self.quoteKey(prefs)
+        if !force, (try? db.get("quote", id: key) as WidgetSnapshot.Quote?) != nil { return }
+        let recent = ((try? db.all("quote", limit: 30, as: WidgetSnapshot.Quote.self)) ?? []).map(\.text)
+        if let q = try? await intel.quote(topic: prefs.string(Prefs.Key.quoteTopic, default: "Stoicism"), avoiding: recent) {
+            try? db.put("quote", id: key, sort: Date().timeIntervalSince1970, q)
+            updateWidgets()
+        }
+    }
+
+    func reloadTasks() { let o = tasks.open(), d = tasks.completed(), s = mail.suggestions(); animated { openTasks = o; doneTasks = d; suggestions = s }; updateWidgets() }
     func reloadNews() { let st = news.stories(limit: 80), sv = news.savedArticles(); animated { stories = st; savedArticles = sv } }
 
     // MARK: Lifecycle
@@ -172,6 +216,8 @@ final class AppModel {
             await generateBriefing(silent: true)
         }
         scheduleTaskNotifications()
+        await refreshQuote()
+        updateWidgets()
     }
 
     func refreshWeather(silent: Bool = false) async {
@@ -215,6 +261,7 @@ final class AppModel {
             let b = try await briefingService.generate(name: userName) { [weak self] text in Task { @MainActor in self?.briefingLive = text } }
             usedReplies = []
             animated { briefing = b }
+            updateWidgets()
             Task { await loadReplies() }
         } catch { if !silent { fail(error, "Briefing") } }
     }
@@ -252,6 +299,15 @@ final class AppModel {
 
     func markHandled(_ threadIDs: [String], label: String = "Marked as handled.") {
         let ids = mail.expandedThreadIDs(Array(Set(threadIDs)))
+        // Quiet them on screen at once, so they leave attention lists before the database catches up.
+        let gone = Set(ids)
+        animated {
+            rows = rows.map { r in
+                guard gone.contains(r.message.threadId), let t = r.triage else { return r }
+                var x = r; x.triage = Triage(messageId: t.messageId, category: .fyi, priority: min(t.priority, 5), summary: t.summary, deadline: nil, actionItems: [], needsReply: false, promptVersion: t.promptVersion); return x
+            }
+            suggestions.removeAll { $0.threadId.map(gone.contains) ?? false }
+        }
         for id in ids { mail.markHandled(threadId: id) }
         reloadMail(); reloadTasks(); scheduleBriefingRewrite()
         say(ids.count > 1 ? "Marked \(ids.count) conversations as handled." : label, undo: { [weak self] in guard let self else { return }; for id in ids { self.mail.unhandle(threadId: id) }; self.reloadMail(); self.scheduleBriefingRewrite() })
@@ -569,7 +625,7 @@ final class AppModel {
 }
 
 enum SettingsPane: String, CaseIterable, Identifiable {
-    case general = "General", briefing = "Briefing", voice = "Voice", accounts = "Accounts", ai = "AI provider", sources = "News sources", interests = "Interests", privacy = "Privacy", notifications = "Notifications", appearance = "Appearance", advanced = "Advanced"
+    case general = "General", briefing = "Briefing", voice = "Voice", accounts = "Accounts", ai = "AI provider", sources = "News sources", interests = "Interests", privacy = "Privacy", notifications = "Notifications", appearance = "Appearance", widgets = "Widgets", advanced = "Advanced"
     var id: String { rawValue }
 }
 

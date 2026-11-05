@@ -5,8 +5,12 @@ pub trait SecretStore: Send + Sync {
     fn delete(&self, key: &str);
 }
 
+/// The desktop secret store. Android has none reachable from Rust, so the Android app supplies its own `SecretStore`.
+#[cfg(not(target_os = "android"))]
 pub struct OsSecrets { service: String }
+#[cfg(not(target_os = "android"))]
 impl OsSecrets { pub fn new(service: &str) -> Self { OsSecrets { service: service.into() } } }
+#[cfg(not(target_os = "android"))]
 impl SecretStore for OsSecrets {
     fn get(&self, key: &str) -> Option<String> { keyring::Entry::new(&self.service, key).ok()?.get_password().ok() }
     fn set(&self, key: &str, value: &str) -> Result<(), String> { keyring::Entry::new(&self.service, key).map_err(|e| e.to_string())?.set_password(value).map_err(|e| e.to_string()) }

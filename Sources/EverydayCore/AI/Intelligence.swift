@@ -91,7 +91,7 @@ public final class Intelligence: @unchecked Sendable {
 
     /// The writing instructions for the briefing. The reader can replace them in Settings → Briefing → Advanced;
     /// "{name}" becomes their first name. The safety rules are always added after them and cannot be edited.
-    public static let defaultBriefingPrompt = "You write {name}'s daily briefing, a short personal note in warm, plain prose. Cover, in this order and only if present: what needs attention (deadlines, replies owed), the calendar, the weather in one clause, then the two or three most important news stories with why they matter. 90 to 150 words, one or two paragraphs, no headings, no bullet points, no greeting."
+    public static let defaultBriefingPrompt = "You write {name}'s daily briefing, a short personal note in warm, plain prose. Use only these sections, in this order, and leave out any that have nothing in them: Needs you (deadlines and replies owed), Today (calendar and the weather in one clause), News (the two or three most important stories, each with why it matters). Start each section with its name on its own line, written as \"## Needs you\", \"## Today\" or \"## News\". One to three sentences per section, 90 to 170 words in all. No bullet points, no greeting."
 
     func briefingSystem(name: String) -> String {
         let standing = prefs.string(Prefs.Key.briefingInstructions).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -104,9 +104,20 @@ public final class Intelligence: @unchecked Sendable {
         """
     }
 
+    /// A real, attributed quote on the reader's chosen topic, for the quote widget. One a day, cached by the caller.
+    public func quote(topic: String, avoiding recent: [String] = []) async throws -> WidgetSnapshot.Quote {
+        let avoid = recent.isEmpty ? "" : " Do not use any of these: \(recent.prefix(10).joined(separator: " | "))."
+        let system = "Give one real, well-known quote about the topic the user names, said or written by a real person, under 30 words. Only use quotes you are confident are attributed correctly; if unsure of the author, choose a different quote. Return JSON: {\"quote\": \"…\", \"author\": \"…\"}. No other text.\(avoid) \(Self.guardrail)"
+        let out = try await ai.complete(.triage, label: "Quote of the day", AIRequest(system: system, messages: [AIMessage(.user, "<data>Topic: \(String(topic.prefix(80)))</data>")], maxTokens: 200, temperature: 0.7, json: true))
+        guard let d = extractJSON(out), let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any],
+              let q = (o["quote"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !q.isEmpty else { throw AIError.badResponse("The AI didn't return a quote.") }
+        let text = q.trimmingCharacters(in: CharacterSet(charactersIn: "\"“”"))
+        return WidgetSnapshot.Quote(text: text, author: (o["author"] as? String) ?? "Unknown", topic: topic)
+    }
+
     /// A much shorter version of a briefing that keeps its facts and highlights.
     public func shorten(briefing: String) async throws -> String {
-        let system = "Rewrite this briefing much shorter: at most three sentences and about 50 words. Keep only what matters most, deadlines and replies owed first, then the weather in a few words. Keep the same facts and never add any. Keep the skim tags around the phrases you keep and do not add other markup.\(skimRule) \(Self.guardrail)"
+        let system = "Rewrite this briefing much shorter: at most three sentences and about 50 words, as one paragraph with no headings. Keep only what matters most, deadlines and replies owed first, then the weather in a few words. Keep the same facts and never add any. Keep the skim tags around the phrases you keep and do not add other markup.\(skimRule) \(Self.guardrail)"
         return try await ai.complete(.summary, label: "Shorter briefing", AIRequest(system: system, messages: [AIMessage(.user, "<data>\n\(briefing)\n</data>")], maxTokens: 300, temperature: 0.2)).trimmingCharacters(in: .whitespacesAndNewlines).skimLimited(6)
     }
 

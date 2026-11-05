@@ -107,22 +107,32 @@ struct TodayView: View {
         return "Drawn from \(list)." + (b.fullText != nil ? " Showing the short version." : "")
     }
 
+    @ViewBuilder private var briefingTitle: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            SectionLabel("Daily briefing")
+            if let b = model.briefing, !model.generatingBriefing { Text("Written \(b.generatedAt.relativeShort)").font(.ui(14)).foregroundStyle(Palette.text3).lineLimit(1).fixedSize() }
+            if model.generatingBriefing { Text("Writing…").font(.ui(14)).foregroundStyle(Palette.text3) }
+        }
+    }
+
+    @ViewBuilder private var briefingButtons: some View {
+        if model.briefing != nil {
+            Button { model.skim.toggle() } label: { Label("Highlights", systemImage: "highlighter") }.buttonStyle(QuietButtonStyle(compact: true, selected: model.skim)).fixedSize().help("Colour the key phrases for skim reading")
+            ListenButton(owner: "briefing", chunks: { [Briefing.plain(model.briefing?.text ?? "")] }).fixedSize()
+            Button(model.shorteningBriefing ? "Shortening…" : (model.briefing?.fullText != nil ? "Full length" : "Shorter")) { Task { await model.toggleShortBriefing() } }
+                .buttonStyle(QuietButtonStyle(compact: true, selected: model.briefing?.fullText != nil)).fixedSize().disabled(model.shorteningBriefing || model.generatingBriefing)
+                .help(model.briefing?.fullText != nil ? "Show the full briefing again" : "Summarise the briefing in a few sentences")
+        }
+        Button(model.briefing == nil ? "Write briefing" : "Rewrite") { Task { await model.generateBriefing() } }
+            .buttonStyle(QuietButtonStyle(compact: true)).fixedSize().disabled(model.generatingBriefing)
+    }
+
     private var briefingSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                SectionLabel("Daily briefing")
-                if let b = model.briefing, !model.generatingBriefing { Text("Written \(b.generatedAt.relativeShort)").font(.ui(14)).foregroundStyle(Palette.text3).lineLimit(1).fixedSize() }
-                if model.generatingBriefing { Text("Writing…").font(.ui(14)).foregroundStyle(Palette.text3) }
-                Spacer()
-                if model.briefing != nil {
-                    Button { model.skim.toggle() } label: { Label("Highlights", systemImage: "highlighter") }.buttonStyle(QuietButtonStyle(compact: true, selected: model.skim)).fixedSize().help("Colour the key phrases for skim reading")
-                    ListenButton(owner: "briefing", chunks: { [SkimMarkup.strip(model.briefing?.text ?? "")] })
-                    Button(model.shorteningBriefing ? "Shortening…" : (model.briefing?.fullText != nil ? "Full length" : "Shorter")) { Task { await model.toggleShortBriefing() } }
-                        .buttonStyle(QuietButtonStyle(compact: true, selected: model.briefing?.fullText != nil)).fixedSize().disabled(model.shorteningBriefing || model.generatingBriefing)
-                        .help(model.briefing?.fullText != nil ? "Show the full briefing again" : "Summarise the briefing in a few sentences")
-                }
-                Button(model.briefing == nil ? "Write briefing" : "Rewrite") { Task { await model.generateBriefing() } }
-                    .buttonStyle(QuietButtonStyle(compact: true)).disabled(model.generatingBriefing)
+            // One row when there's room; otherwise the buttons move under the title instead of being squeezed.
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline, spacing: 12) { briefingTitle; Spacer(minLength: 12); briefingButtons }
+                VStack(alignment: .leading, spacing: 10) { briefingTitle; HStack(spacing: 8) { briefingButtons } }
             }
             if let text = briefingText {
                 SkimBody(text: text, size: 18, smooth: model.generatingBriefing)
@@ -159,8 +169,10 @@ struct TodayView: View {
                 ? [QuickReply(id: "d-remind", label: "Remind me tonight", kind: .remind, messageIds: Array(allIDs.prefix(3)))].filter { !model.usedReplies.contains($0.id) } : []
             // The AI writes the buttons for this situation. Repeats (same label, or a second "handled" button) are dropped.
             var seenLabels = Set<String>(), seenHandled = false
+            // "That was me" only for account-security notices; otherwise it lives in each item's menu.
+            let securityIDs = Set(attention.flatMap { att -> [String] in switch att { case .row(let r): return MailBundler.isSecurityNotice(r.message) ? [r.message.id] : []; case .bundle(let b): return b.rows.filter { MailBundler.isSecurityNotice($0.message) }.map(\.message.id) } })
             let chips = (suggested + defaults).filter { q in
-                if q.kind == .handled { if seenHandled { return false }; seenHandled = true }
+                if q.kind == .handled { guard !seenHandled, q.messageIds.contains(where: securityIDs.contains) else { return false }; seenHandled = true }
                 return seenLabels.insert(q.label.lowercased()).inserted
             }
             if !chips.isEmpty {
@@ -187,7 +199,8 @@ struct TodayView: View {
                 Text(.init(attentionTitle(r))).font(.ui(15.5)).lineLimit(2)
                 Spacer(minLength: 8)
                 attentionButtons(handled: [r.message.threadId], ignore: [r.message], open: { model.selectedThread = r.message.threadId; model.section = .inbox }, task: r)
-            }.padding(.vertical, 8)
+            }.padding(.vertical, 8).contentShape(Rectangle())
+            .contextMenu { Button("That was me") { model.markHandled([r.message.threadId]) }; Button("Always treat mail like this as handled") { model.ignoreSimilar([r.message]) } }
         case .bundle(let b):
             HStack(spacing: 12) {
                 Circle().fill(b.hasUrgent ? Palette.alertFG : Palette.accent).frame(width: 7, height: 7)
@@ -197,11 +210,13 @@ struct TodayView: View {
                 }
                 Spacer(minLength: 8)
                 attentionButtons(handled: b.rows.map { $0.message.threadId }, ignore: b.rows.map(\.message), open: { model.selectedBundleID = b.id; model.selectedThread = nil; model.section = .inbox }, task: nil)
-            }.padding(.vertical, 8)
+            }.padding(.vertical, 8).contentShape(Rectangle())
+            .contextMenu { Button("That was me") { model.markHandled(b.rows.map { $0.message.threadId }) } }
         }
     }
 
     @ViewBuilder private func attentionButtons(handled: [String], ignore: [EmailMessage], open: @escaping () -> Void, task: MailRow?) -> some View {
+        if ignore.contains(where: MailBundler.isSecurityNotice) { Button("That was me") { model.markHandled(handled) }.buttonStyle(QuietButtonStyle(compact: true)) }
         if let r = task, r.triage?.needsReply == true { Button("Review") { open() }.buttonStyle(PrimaryButtonStyle(compact: true)) }
         else { Button("Open") { open() }.buttonStyle(QuietButtonStyle(compact: true)) }
         Menu {

@@ -30,13 +30,14 @@ public final class NewsService: @unchecked Sendable {
         if let saved: [FeedSource] = try? db.all("feed"), !saved.isEmpty {
             // merge in new defaults added by app updates
             var out = saved
-            for d in FeedCatalog.defaults where !saved.contains(where: { $0.url == d.url }) { out.append(d) }
+            let removed = Set(((try? db.query("SELECT id FROM docs WHERE kind='feedRemoved'")) ?? []).compactMap { if case .text(let t)? = $0["id"] { return t } else { return nil } })
+            for d in FeedCatalog.defaults where !saved.contains(where: { $0.url == d.url }) && !removed.contains(d.url) { out.append(d) }
             return out.sorted { $0.name < $1.name }
         }
         return FeedCatalog.defaults.sorted { $0.name < $1.name }
     }
 
-    public func save(source: FeedSource) { try? db.put("feed", id: source.url, source) }
+    public func save(source: FeedSource) { try? db.put("feed", id: source.url, source); try? db.delete("feedRemoved", id: source.url) }
     public func saveAll(_ s: [FeedSource]) { for x in s { save(source: x) } }
     public func remove(source: FeedSource) { try? db.delete("feed", id: source.url); try? db.put("feedRemoved", id: source.url, true) }
     public func health() -> [String: FeedHealth] {
@@ -134,7 +135,7 @@ public final class NewsService: @unchecked Sendable {
     public static func isPromo(_ title: String) -> Bool { promoPattern.firstMatch(in: title, range: NSRange(location: 0, length: (title as NSString).length)) != nil }
 
     /// Groups near-duplicate headlines into stories, drops stale items and ranks by interest, recency and trust.
-    public func stories(category: NewsCategory? = nil, limit: Int = 60) -> [Story] {
+    public func stories(category: NewsCategory? = nil, topic: String? = nil, limit: Int = 60) -> [Story] {
         let freshness = prefs.double(Prefs.Key.freshnessHours, default: 48)
         let cutoff = Date().addingTimeInterval(-freshness * 3600)
         let muted = prefs.strings(Prefs.Key.mutedTopics).map { $0.lowercased() }.filter { !$0.isEmpty }
@@ -142,6 +143,8 @@ public final class NewsService: @unchecked Sendable {
         if !muted.isEmpty { arts = arts.filter { a in let t = (a.title + " " + a.summary).lowercased(); return !muted.contains(where: t.contains) } }
         if prefs.bool("newsHidePromos", default: true) { arts = arts.filter { !Self.isPromo($0.title) } }
         if let c = category { arts = arts.filter { $0.categories.contains(c) } }
+        if let t = topic?.lowercased(), !t.isEmpty { arts = arts.filter { ($0.title + " " + $0.summary).lowercased().contains(t) } }
+        let followed = prefs.strings(Prefs.Key.followedTopics).map { $0.lowercased() }.filter { !$0.isEmpty }
         let includeOutside = prefs.bool(Prefs.Key.outsideBubble, default: true)
         arts.sort { $0.published > $1.published }
 
@@ -163,7 +166,10 @@ public final class NewsService: @unchecked Sendable {
             let interest = interests.score(c.lead)
             let coverage = log2(Double(1 + c.others.count)) * 0.6
             let trust = Double(c.lead.trust - 2) * 0.3
-            return Story(lead: c.lead, others: c.others, score: interest * 0.5 + recency * 3 + coverage + trust)
+            // Topics the reader follows by name lift any story that mentions them.
+            let text = (c.lead.title + " " + c.lead.summary).lowercased()
+            let follow = followed.contains(where: text.contains) ? 2.5 : 0
+            return Story(lead: c.lead, others: c.others, score: interest * 0.5 + recency * 3 + coverage + trust + follow)
         }
         stories.sort { $0.score > $1.score }
         // Exploration: keep roughly one in ten slots for outside-your-bubble sources.

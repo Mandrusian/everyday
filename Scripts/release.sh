@@ -31,7 +31,9 @@ echo "▸ Build $VERSION"
 
 if [ -n "${DEVELOPER_ID:-}" ]; then
   echo "▸ Sign (hardened runtime) as $DEVELOPER_ID"
-  codesign --force --deep --options runtime --timestamp --entitlements $ENT --sign "$DEVELOPER_ID" $APP
+  # The widget extension keeps its own sandbox entitlements, so sign it first and the app without --deep.
+  codesign --force --options runtime --timestamp --entitlements Resources/widgets.entitlements --sign "$DEVELOPER_ID" $APP/Contents/PlugIns/EverydayWidgets.appex
+  codesign --force --options runtime --timestamp --entitlements $ENT --sign "$DEVELOPER_ID" $APP
   codesign --verify --deep --strict --verbose=2 $APP
 else
   echo "▸ No DEVELOPER_ID set: leaving the ad-hoc signature (test build only)"

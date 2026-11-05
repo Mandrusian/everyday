@@ -41,8 +41,14 @@ struct BundleView: View {
     var body: some View {
         VStack(spacing: 0) {
             PaneHeader(title: "\(bundle.title)", subtitle: "\(bundle.count) emails") {
-                Button("That was me") { model.markHandled(bundle.rows.map { $0.message.threadId }) }.buttonStyle(QuietButtonStyle(compact: true)).help("Stop flagging these. Nothing changes in your mail account.")
+                if bundle.rows.contains(where: { MailBundler.isSecurityNotice($0.message) }) {
+                    Button("That was me") { model.markHandled(bundle.rows.map { $0.message.threadId }) }.buttonStyle(QuietButtonStyle(compact: true)).help("Stop flagging these. Nothing changes in your mail account.")
+                }
                 Button("Archive all") { confirmArchive = true }.buttonStyle(QuietButtonStyle(compact: true))
+                Menu {
+                    Button("That was me") { model.markHandled(bundle.rows.map { $0.message.threadId }) }
+                    if let m = bundle.rows.first?.message { Button("Always treat mail like this as handled") { model.ignoreSimilar([m]) } }
+                } label: { Image(systemName: "ellipsis") }.menuStyle(.button).buttonStyle(QuietButtonStyle(compact: true)).menuIndicator(.hidden).fixedSize().accessibilityLabel("More actions")
             }
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {

@@ -9,16 +9,16 @@ enum Palette {
             return NSColor(hex: isDark ? dark : light)
         })
     }
-    static let window = dyn(0x1c1b19, 0xfaf9f5)
-    static let sidebar = dyn(0x171614, 0xefece3)
-    static let raised = dyn(0x25231f, 0xf3efe5)
-    static let control = dyn(0x2d2b27, 0xe9e4d7)
-    static let selected = dyn(0x2a2723, 0xece5d3)
-    static let line = dyn(0x33312c, 0xe2d9c8)
-    static let softLine = dyn(0x2b2926, 0xebe4d4)
-    static let text = dyn(0xece8df, 0x1f1e1d)
-    static let text2 = dyn(0xa39e92, 0x5e5b52)
-    static let text3 = dyn(0x8c887d, 0x6b675c)
+    static let window = dyn(0x1c1b19, 0xf4eee2)
+    static let sidebar = dyn(0x171614, 0xebe2d0)
+    static let raised = dyn(0x25231f, 0xfaf6ec)
+    static let control = dyn(0x2d2b27, 0xe7dcc7)
+    static let selected = dyn(0x2a2723, 0xe8ddc6)
+    static let line = dyn(0x33312c, 0xdbcfb8)
+    static let softLine = dyn(0x2b2926, 0xe4d9c5)
+    static let text = dyn(0xece8df, 0x24201a)
+    static let text2 = dyn(0xa39e92, 0x5b5346)
+    static let text3 = dyn(0x8c887d, 0x786e5d)
     static let accent = dyn(0xd97757, 0xb5532f)
     static let onAccent = dyn(0x1c1b19, 0xffffff)
     static let accentText = dyn(0xe8916f, 0x9a4424)
@@ -33,7 +33,39 @@ enum Palette {
     static let alertFG = dyn(0xee9e96, 0x8b2e25)
     static let infoBG = dyn(0x26303a, 0xdfe6ec)
     static let infoFG = dyn(0x9dbad0, 0x33495c)
-    static let quietBG = dyn(0x2b2a26, 0xe9e4d6)
+    static let quietBG = dyn(0x2b2a26, 0xe6dcc8)
+}
+
+/// Paper grain: fine fibres and a soft mottle, generated once and tiled under the interface.
+struct PaperGrain: View {
+    @Environment(\.colorScheme) private var scheme
+    static let tile: NSImage = {
+        let n = 256
+        var px = [UInt8](repeating: 0, count: n * n * 4)
+        var seed: UInt64 = 0x9E3779B97F4A7C15
+        func rnd() -> Double { seed = seed &* 6364136223846793005 &+ 1442695040888963407; return Double(seed >> 33) / Double(1 << 31) }
+        for i in 0..<(n * n) {
+            let y = i / n, x = i % n
+            let fibre = rnd()
+            let streak = (sin(Double(x) * 0.07 + Double(y) * 0.012) + 1) * 0.5          // faint long fibres
+            let v = 0.55 * fibre + 0.45 * streak * rnd()
+            let a = UInt8(min(255, v * 255))
+            px[i * 4] = 92; px[i * 4 + 1] = 70; px[i * 4 + 2] = 40; px[i * 4 + 3] = a
+        }
+        let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: n, pixelsHigh: n, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: n * 4, bitsPerPixel: 32)!
+        px.withUnsafeBufferPointer { memcpy(rep.bitmapData!, $0.baseAddress!, px.count) }
+        let img = NSImage(size: NSSize(width: n, height: n)); img.addRepresentation(rep); return img
+    }()
+    var body: some View {
+        Image(nsImage: Self.tile).resizable(resizingMode: .tile)
+            .opacity(scheme == .dark ? 0.035 : 0.075).blendMode(scheme == .dark ? .plusLighter : .multiply)
+            .allowsHitTesting(false).accessibilityHidden(true)
+    }
+}
+
+extension View {
+    /// A paper-coloured background with grain, used for the main surfaces.
+    func paper(_ color: Color) -> some View { background(ZStack { color; PaperGrain() }.ignoresSafeArea()) }
 }
 
 extension NSColor {

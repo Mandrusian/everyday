@@ -20,7 +20,7 @@ struct RootView: View {
                 }
                 .transition(.opacity.combined(with: .offset(y: 6)))
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Palette.window)
+                .paper(Palette.window)
                 if model.showAssistant {
                     Hairline(vertical: true)
                     AssistantPanel().frame(width: 380).transition(.move(edge: .trailing))
@@ -36,7 +36,7 @@ struct RootView: View {
                 OnboardingView().transition(.opacity)
             }
         }
-        .background(Palette.window)
+        .paper(Palette.window)
         .animation(Motion.spring, value: model.banner)
         .animation(.easeOut(duration: 0.25), value: model.showOnboarding)
         .ignoresSafeArea()
@@ -110,7 +110,7 @@ struct SidebarView: View {
         }
         .padding(.horizontal, 10).padding(.bottom, 14)
         .frame(width: 232).frame(maxHeight: .infinity)
-        .background(Palette.sidebar)
+        .paper(Palette.sidebar)
         .overlay(alignment: .trailing) { Hairline(vertical: true) }
     }
 

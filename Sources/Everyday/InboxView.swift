@@ -118,6 +118,12 @@ struct InboxView: View {
                             Group {
                                 switch item {
                                 case .thread(let r): MailRowView(row: r, selected: model.selectedThread == r.message.threadId).onTapGesture { model.selectedBundleID = nil; model.returnBundleID = nil; model.selectedThread = r.message.threadId }
+                                    .contextMenu {
+                                        Button("That was me") { model.markHandled([r.message.threadId]) }
+                                        Button("Always treat mail like this as handled") { model.ignoreSimilar([r.message]) }
+                                        Divider()
+                                        Button("Archive") { model.archiveThread(r.message.threadId) }
+                                    }
                                 case .bundle(let b): BundleRowView(bundle: b, selected: model.selectedBundleID == b.id && model.selectedThread == nil).onTapGesture { model.selectedBundleID = b.id; model.selectedThread = nil; model.returnBundleID = nil }
                                 }
                             }.entrance(idx).transition(.asymmetric(insertion: .opacity, removal: .opacity.combined(with: .move(edge: .leading))))
@@ -180,7 +186,7 @@ struct ThreadView: View {
         VStack(spacing: 0) {
             PaneHeader(title: msgs.last?.subject ?? "Conversation") {
                 if let bid = model.returnBundleID { Button { model.selectedThread = nil; model.selectedBundleID = bid; model.returnBundleID = nil } label: { Label("Back to bundle", systemImage: "chevron.left") }.buttonStyle(QuietButtonStyle(compact: true)) }
-                Button("That was me") { model.markHandled([threadId]) }.buttonStyle(QuietButtonStyle(compact: true)).help("Stop flagging this conversation. Nothing changes in your mail account.")
+                if msgs.contains(where: MailBundler.isSecurityNotice) { Button("That was me") { model.markHandled([threadId]) }.buttonStyle(QuietButtonStyle(compact: true)).help("Stop flagging this conversation. Nothing changes in your mail account.") }
                 Menu {
                     ForEach(AppModel.snoozeOptions(), id: \.title) { o in Button("\(o.title) · \(o.date.formatted(date: .abbreviated, time: .shortened))") { model.snooze(threadId, until: o.date, label: o.title) } }
                 } label: { Text("Snooze") }.menuStyle(.button).buttonStyle(QuietButtonStyle(compact: true)).menuIndicator(.hidden).fixedSize().help("Hide it until later, with a reminder task. Nothing changes in your mail account.")
@@ -188,6 +194,7 @@ struct ThreadView: View {
                 Button("Archive") { model.archiveThread(threadId) }.buttonStyle(QuietButtonStyle(compact: true))
                 Button("Trash") { model.trashThread(threadId) }.buttonStyle(QuietButtonStyle(compact: true)).help("Moves it to Trash. You can restore it from there.")
                 Menu {
+                    Button("That was me") { model.markHandled([threadId]) }
                     Button("Always treat mail like this as handled") { if let m = msgs.last { model.ignoreSimilar([m]) } }
                     if let m = msgs.last { Button(model.mail.isVIP(m.fromAddress) ? "Remove VIP" : "Always important (VIP)") { model.toggleVIP(m.fromAddress) } }
                     if UnsubscribeTarget.parse(msgs.last?.listUnsubscribe) != nil { Divider(); Button("Unsubscribe…") { unsub = UnsubscribeTarget.parse(msgs.last?.listUnsubscribe) } }
@@ -256,7 +263,7 @@ struct ThreadView: View {
                     if m.hasAttachments { Image(systemName: "paperclip").foregroundStyle(Palette.text3).accessibilityLabel("Has attachments") }
                 }.contentShape(Rectangle())
             }.buttonStyle(.plain)
-            Text(open ? m.body : String(m.snippet.prefix(160))).font(.ui(17)).lineSpacing(5).foregroundStyle(open ? Palette.text : Palette.text2).textSelection(.enabled)
+            Text(open ? MailBody.attributed(m.body) : AttributedString(String(MailText.readable(m.snippet).prefix(160)))).font(.ui(17)).lineSpacing(5).foregroundStyle(open ? Palette.text : Palette.text2).textSelection(.enabled)
                 .lineLimit(open ? nil : 2)
             if open && !m.attachmentNames.isEmpty {
                 FlowLayout(spacing: 8) {
@@ -352,5 +359,22 @@ struct SendReview: View {
         sending = true
         model.queueSend(threadId: threadId, body: text)    // held for 10 seconds so it can be undone
         done(true); dismiss()
+    }
+}
+
+/// Email text with real links: the words of a link are clickable and the long URL stays hidden.
+enum MailBody {
+    static func attributed(_ body: String) -> AttributedString {
+        var out = AttributedString()
+        for p in MailText.pieces(body) {
+            var a = AttributedString(p.text)
+            if let u = p.link, ["http", "https", "mailto"].contains(u.scheme?.lowercased() ?? "") {
+                a.link = u
+                a.foregroundColor = Palette.accentText
+                a.underlineStyle = .single
+            }
+            out += a
+        }
+        return out
     }
 }

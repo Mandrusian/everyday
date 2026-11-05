@@ -23,9 +23,14 @@ public enum SkimMarkup {
         }
         if last < ns.length { out.append(Segment(text: ns.substring(from: last), kind: nil)) }
         // A model that opened a tag and never closed it should not leak "<<u|" into the UI.
-        return out.map { seg in
+        // Tags around nothing (or only dots) become plain text, and stray template braces are dropped.
+        let unbalanced = !s.contains("{")
+        return out.compactMap { seg in
             var t = seg.text
             t = t.replacingOccurrences(of: #"<<[uadpmnl]\|"#, with: "", options: .regularExpression).replacingOccurrences(of: ">>", with: "")
+            if unbalanced { t = t.replacingOccurrences(of: "}", with: "") }
+            let core = t.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: ".…")))
+            if seg.kind != nil && core.isEmpty { return nil }
             return Segment(text: t, kind: seg.kind)
         }
     }

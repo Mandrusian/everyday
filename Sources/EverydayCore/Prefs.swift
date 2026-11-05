@@ -32,6 +32,8 @@ public final class Prefs: @unchecked Sendable {
         public static let briefingSections = "briefing.sections"          // [String]: mail, calendar, weather, news, tasks
         public static let briefingNewsCount = "briefing.newsCount"
         public static let briefingInstructions = "briefing.instructions"  // free text the reader writes
+        public static let quoteTopic = "widgets.quoteTopic"              // topic for the quote-of-the-day widget
+        public static let followedTopics = "news.followedTopics"         // the reader's own topics, by name
         public static let briefingPrompt = "briefing.prompt"              // Advanced: replaces the default writing instructions
         public static let mutedTopics = "news.mutedTopics"                // [String] keywords hidden everywhere
         public static let briefingAutoRewrite = "briefing.autoRewrite"

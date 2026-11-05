@@ -18,6 +18,7 @@ struct SettingsView: View {
         .privacy: "privacy delete data keychain redact local",
         .notifications: "notifications reminders alerts briefing time",
         .appearance: "appearance theme dark light highlight skim colours font size motion",
+        .widgets: "widgets desktop clock weather calendar quote brief notification centre",
         .advanced: "advanced prompt briefing instructions system custom edit reset",
     ]
     private var matches: [SettingsPane] {
@@ -65,6 +66,7 @@ struct SettingsView: View {
                         case .privacy: PrivacyPane()
                         case .notifications: NotificationsPane()
                         case .appearance: AppearancePane()
+                        case .widgets: WidgetsPane()
                         case .advanced: AdvancedPane()
                         }
                     }.padding(.horizontal, 40).padding(.vertical, 28).frame(maxWidth: 760, alignment: .leading).frame(maxWidth: .infinity, alignment: .leading)
@@ -284,6 +286,28 @@ struct VoicePane: View {
             }
         }.onAppear { cacheBytes = model.ai.speechClient()?.cacheSize() ?? 0 }
     }
+}
+
+/// Desktop and Notification Centre widgets, and the topic for the daily quote.
+struct WidgetsPane: View {
+    @Environment(AppModel.self) private var model
+    @Local private var topic = Prefs.shared.string(Prefs.Key.quoteTopic, default: "Stoicism")
+    @Local private var busy = false
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("everyday. has widgets for your desktop and Notification Centre: Clock, Weather, Up next, Brief, Quote of the day, Needs you, Top news and Tasks. They use the same warm paper as the app and follow light and dark mode.").font(.ui(15.5)).foregroundStyle(Palette.text2)
+            Text("To add one, right-click the desktop and choose Edit Widgets, then search for “everyday.”. They update whenever the app refreshes, and read only a small summary the app saves on this Mac.").font(.ui(14.5)).foregroundStyle(Palette.text3)
+            SectionLabel("Quote of the day").padding(.top, 6)
+            HStack(alignment: .bottom, spacing: 10) {
+                Field(title: "Topic", text: $topic, placeholder: "Stoicism, flying, design, Australian history…")
+                Button(busy ? "Finding…" : "New quote") { save(); Task { busy = true; await model.refreshQuote(force: true); busy = false } }.buttonStyle(QuietButtonStyle()).disabled(busy || !model.ai.isConfigured)
+            }
+            .onSubmit { save() }
+            if !model.ai.isConfigured { Text("The quote needs an AI key (Settings → AI provider). The other widgets work without one.").font(.ui(14)).foregroundStyle(Palette.warnFG) }
+            HStack { Button("Refresh widgets now") { model.updateWidgets() }.buttonStyle(QuietButtonStyle()); Spacer() }.padding(.top, 4)
+        }
+    }
+    private func save() { let t = topic.trimmingCharacters(in: .whitespacesAndNewlines); model.prefs.set(t.isEmpty ? "Stoicism" : t, Prefs.Key.quoteTopic) }
 }
 
 /// For people who want full control: the instructions the AI follows when it writes the briefing.
@@ -573,6 +597,16 @@ struct InterestsPane: View {
     @Local private var deck: [Article] = []
     @Local private var confirmReset = false
     @Local private var tick = 0
+    @Local private var newTopic = ""
+    @Local private var topics: [String] = Prefs.shared.strings(Prefs.Key.followedTopics)
+
+    private func addTopic() {
+        let t = newTopic.trimmingCharacters(in: .whitespacesAndNewlines)
+        newTopic = ""
+        guard !t.isEmpty, !topics.contains(where: { $0.lowercased() == t.lowercased() }) else { return }
+        topics.append(t); saveTopics()
+    }
+    private func saveTopics() { model.prefs.set(topics, Prefs.Key.followedTopics); model.reloadNews() }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -588,6 +622,21 @@ struct InterestsPane: View {
                 }
             }
             Text("\(model.interests.snapshot.reactionCount) reactions recorded.").font(.ui(14)).foregroundStyle(Palette.text3)
+            Hairline()
+            SectionLabel("Your own topics")
+            Text("Follow anything by name, like “Formula 1”, “Cairns” or “Rust”. Stories that mention it rise to the top, and it gets its own tab in News.").font(.ui(14)).foregroundStyle(Palette.text3)
+            HStack(spacing: 8) {
+                TextField("Add a topic, then press Return", text: $newTopic).accessibilityLabel("Follow a topic").textFieldStyle(.plain).font(.ui(15)).padding(.horizontal, 10).frame(height: 32).background(RoundedRectangle(cornerRadius: 7).fill(Palette.raised)).onSubmit { addTopic() }
+                Button("Follow") { addTopic() }.buttonStyle(QuietButtonStyle()).disabled(newTopic.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+            if !topics.isEmpty {
+                FlowLayout(spacing: 8) {
+                    ForEach(topics, id: \.self) { t in
+                        HStack(spacing: 6) { Text(t).font(.ui(14)); Button { topics.removeAll { $0 == t }; saveTopics() } label: { Image(systemName: "xmark").font(.system(size: 10, weight: .bold)) }.buttonStyle(.plain).accessibilityLabel("Stop following \(t)") }
+                            .padding(.horizontal, 10).padding(.vertical, 5).background(Capsule().fill(Palette.control))
+                    }
+                }
+            }
             Hairline()
             SectionLabel("Categories")
             CategoryPicker(selected: $cats).onChange(of: cats) { _, v in model.prefs.set(v.map(\.rawValue), Prefs.Key.categories); model.interests.seed(categories: []) }

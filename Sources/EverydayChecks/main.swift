@@ -557,5 +557,28 @@ if let em = ProcessInfo.processInfo.environment["IMAP_EMAIL"], let pw = ProcessI
     } catch { check("live imap", false, "\(error)") }
 } else { print("SKIP  live IMAP checks (set IMAP_EMAIL and IMAP_PASSWORD)") }
 
+// "That was me" is only offered up front for account-security notices
+func notice(_ from: String, _ subject: String, _ snippet: String = "") -> EmailMessage { EmailMessage(id: subject, threadId: subject, fromName: "x", fromAddress: from, to: "", subject: subject, snippet: snippet, body: "", date: Date(), labelIds: ["INBOX"], hasAttachments: false) }
+check("security notices are recognised", MailBundler.isSecurityNotice(notice("no-reply@accounts.google.com", "Security alert", "New sign-in on Mac")) && MailBundler.isSecurityNotice(notice("noreply@github.com", "[GitHub] A personal access token (classic) has been added to your account")) && MailBundler.isSecurityNotice(notice("no-reply@google.com", "Google security alert regarding newly granted account access")))
+check("ordinary mail is not a security notice", !MailBundler.isSecurityNotice(notice("notifications@github.com", "[Mandrusian/everyday] Run failed: Windows - main")) && !MailBundler.isSecurityNotice(notice("oscar@example.com", "Thursday roadmap sync")))
+
+// Email bodies: link words instead of raw URLs
+let rawMail = "Make it easier.\nSet up a  \npasskey<<https://c.gle/AAA>>\n<https://c.gle/tracking>\nUnsubscribe  \n<https://myaccount.google.com/unsub?x=1>  \n| Manage Preferences  \n<https://myaccount.google.com/manage>\nSee https://example.com/page for more."
+let mp = MailText.pieces(rawMail)
+check("mail: labelled links keep their words", mp.contains { $0.text == "Set up a passkey" && $0.link?.host == "c.gle" }, "\(mp.map { "\($0.text)|\($0.link?.absoluteString ?? "-")" })")
+check("mail: angle-bracket links attach to the words before them", mp.contains { $0.text == "Unsubscribe" && $0.link != nil } && mp.contains { $0.text.contains("Manage Preferences") && $0.link != nil })
+check("mail: link-only lines and raw URLs disappear from the text", !MailText.readable(rawMail).contains("https://") && !MailText.readable(rawMail).contains("c.gle/tracking") && MailText.readable(rawMail).contains("example.com"), MailText.readable(rawMail))
+
+// Briefing sections
+let sectioned = "## Needs you\n<<a|Reply to Oscar>> about Thursday. Google sent a sign-in alert.\n\n## News\nSolar had a record year."
+check("briefing: sections split by heading", Briefing.sections(sectioned).map { $0.heading ?? "-" } == ["Needs you", "News"])
+check("briefing: plain text drops headings and tags", Briefing.plain(sectioned) == "Reply to Oscar about Thursday. Google sent a sign-in alert.\n\nSolar had a record year.", Briefing.plain(sectioned))
+check("briefing: removing a handled sender keeps the headings", Briefing.removingSentences(mentioning: ["Google"], from: sectioned) == "## Needs you\n<<a|Reply to Oscar>> about Thursday.\n\n## News\nSolar had a record year.", Briefing.removingSentences(mentioning: ["Google"], from: sectioned))
+check("briefing: a section left empty loses its heading", !Briefing.removingSentences(mentioning: ["solar"], from: sectioned).contains("## News"))
+check("skim: empty or dotted highlights and stray braces vanish", SkimMarkup.segments("Routine. <<u|...>> <<d|…>> windows-latest} failed").allSatisfy { $0.kind == nil } && !SkimMarkup.strip("windows-latest} failed").contains("}"))
+
+// Widgets snapshot
+check("widgets: short brief ends on a sentence", WidgetSnapshot.shortBrief("## Needs you\nPay rent by Friday. Oscar wants to know whether Thursday at three still works for the roadmap sync with the whole team.", limit: 40) == "Pay rent by Friday.", WidgetSnapshot.shortBrief("## Needs you\nPay rent by Friday. Oscar wants to know whether Thursday at three still works for the roadmap sync with the whole team.", limit: 40))
+
 print(failures == 0 ? "ALL CHECKS PASSED" : "\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)

@@ -170,14 +170,52 @@ public final class BriefingService: @unchecked Sendable {
 
 extension Briefing {
     /// Removes every sentence that mentions any of the names (case-insensitive, ignoring highlight tags).
+    /// Works line by line so section headings survive, and drops a heading whose section ends up empty.
     public static func removingSentences(mentioning names: [String], from text: String) -> String {
         let names = names.map { $0.lowercased() }.filter { !$0.isEmpty }
         guard !names.isEmpty else { return text }
-        var sentences: [String] = [], cur = ""
-        for ch in text { cur.append(ch); if ".!?".contains(ch) { sentences.append(cur); cur = "" } }
-        if !cur.isEmpty { sentences.append(cur) }
-        let kept = sentences.filter { s in let plain = SkimMarkup.strip(s).lowercased(); return !names.contains { plain.contains($0) } }
-        return kept.joined().trimmingCharacters(in: .whitespacesAndNewlines)
+        func clean(_ line: String) -> String {
+            var sentences: [String] = [], cur = ""
+            for ch in line { cur.append(ch); if ".!?".contains(ch) { sentences.append(cur); cur = "" } }
+            if !cur.isEmpty { sentences.append(cur) }
+            let kept = sentences.filter { s in let plain = SkimMarkup.strip(s).lowercased(); return !names.contains { plain.contains($0) } }
+            return kept.joined().trimmingCharacters(in: .whitespaces)
+        }
+        var out: [String] = []
+        for line in text.components(separatedBy: "\n") {
+            if isHeading(line) { out.append(line.trimmingCharacters(in: .whitespaces)); continue }
+            let c = clean(line)
+            if !c.isEmpty || line.trimmingCharacters(in: .whitespaces).isEmpty { out.append(c) }
+        }
+        // Drop headings with nothing under them.
+        var result: [String] = []
+        for (i, l) in out.enumerated() {
+            if isHeading(l) {
+                let rest = out[(i + 1)...].prefix { !isHeading($0) }
+                if rest.allSatisfy({ $0.trimmingCharacters(in: .whitespaces).isEmpty }) { continue }
+            }
+            result.append(l)
+        }
+        return result.joined(separator: "\n").replacingOccurrences(of: #"\n{3,}"#, with: "\n\n", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    static func isHeading(_ line: String) -> Bool { line.trimmingCharacters(in: .whitespaces).hasPrefix("## ") }
+
+    /// The briefing split into sections: an optional short heading and its text.
+    public static func sections(_ text: String) -> [(heading: String?, body: String)] {
+        var out: [(String?, String)] = [], heading: String? = nil, body: [String] = []
+        func flush() { let b = body.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines); if heading != nil || !b.isEmpty { out.append((heading, b)) }; body = [] }
+        for line in text.components(separatedBy: "\n") {
+            if isHeading(line) { flush(); heading = String(line.trimmingCharacters(in: .whitespaces).dropFirst(3)).trimmingCharacters(in: CharacterSet(charactersIn: " #:")) }
+            else { body.append(line) }
+        }
+        flush()
+        return out.filter { !$0.1.isEmpty }
+    }
+
+    /// Plain prose for speech and notifications: no highlight tags and no headings.
+    public static func plain(_ text: String) -> String {
+        sections(text).map { SkimMarkup.strip($0.body) }.joined(separator: "\n\n")
     }
 }
 
@@ -193,7 +231,7 @@ public enum BriefingSchedule {
     }
     /// A short notification body: the first sentence or two of the briefing, without highlight tags.
     public static func preview(_ text: String, limit: Int = 150) -> String {
-        let plain = SkimMarkup.strip(text).replacingOccurrences(of: "\n", with: " ")
+        let plain = Briefing.plain(text).replacingOccurrences(of: "\n", with: " ")
         if plain.count <= limit { return plain }
         let cut = String(plain.prefix(limit))
         if let end = cut.lastIndex(where: { ".!?".contains($0) }) { return String(cut[...end]) }

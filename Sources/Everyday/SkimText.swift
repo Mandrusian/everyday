@@ -38,8 +38,19 @@ struct SkimBody: View {
     var body: some View {
         let font: Font = model.skimSans ? .system(size: size - 1.5) : .serif(size)
         let visible = smooth && shown >= 0 && shown < text.count ? String(text.prefix(shown)) : text
+        let parts = Briefing.sections(visible)
         Group {
-            if model.skim { Text(attributed(visible)) } else { Text(SkimMarkup.strip(visible)) }
+            if parts.contains(where: { $0.heading != nil }) {
+                // A briefing written in sections: small headings, then each section's text.
+                VStack(alignment: .leading, spacing: 14) {
+                    ForEach(Array(parts.enumerated()), id: \.offset) { _, p in
+                        VStack(alignment: .leading, spacing: 4) {
+                            if let h = p.heading { Text(h).font(.ui(12.5, .semibold)).tracking(0.4).foregroundStyle(Palette.accentText) }
+                            paragraph(p.body)
+                        }
+                    }
+                }
+            } else { paragraph(visible) }
         }
         .font(font).lineSpacing(model.skimSans ? 5 : 6).foregroundStyle(muted ? Palette.text2 : Palette.text).textSelection(.enabled)
         .onAppear { if shown < 0 { shown = text.count }; latest = text }
@@ -64,6 +75,10 @@ struct SkimBody: View {
 
     @Local private var latestBox = ""
     private var latest: String { get { latestBox } nonmutating set { latestBox = newValue } }
+
+    @ViewBuilder private func paragraph(_ t: String) -> some View {
+        if model.skim { Text(attributed(t)) } else { Text(SkimMarkup.strip(t)) }
+    }
 
     private func attributed(_ t: String) -> AttributedString {
         var out = AttributedString()

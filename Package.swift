@@ -17,6 +17,12 @@ let package = Package(
             name: "Everyday",
             dependencies: ["EverydayCore"]
         ),
+        // The widget extension. Scripts/bundle.sh wraps it in an .appex inside the app.
+        .executableTarget(
+            name: "EverydayWidgets",
+            swiftSettings: [.unsafeFlags(["-application-extension"])],
+            linkerSettings: [.unsafeFlags(["-Xlinker", "-application_extension"])]
+        ),
         .executableTarget(
             name: "EverydayChecks",
             dependencies: ["EverydayCore"]
