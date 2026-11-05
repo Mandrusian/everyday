@@ -452,3 +452,7 @@ html, body { max-width: 100%; overflow-x: clip; }
   .doc td { border: 0; padding: 2px 0; }
   .doc td:first-child { color: var(--ink); font-weight: 600; }
 }
+
+.ink .more { margin-top: 28px; font-size: 15.5px; }
+.ink .more a { color: var(--on-night); text-decoration: underline; text-decoration-color: var(--clay); text-underline-offset: 4px; text-decoration-thickness: 1.5px; transition: color .2s; }
+.ink .more a:hover { color: var(--clay); }
