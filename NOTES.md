@@ -59,7 +59,7 @@ State of everyday. for whoever picks this up next. Read README.md, ROADMAP.md, W
   - Windows SMTP: malformed or non-ASCII server replies return an error instead of panicking; reply headers strip control characters (no header injection); envelope addresses with control characters or `<>` are rejected before any command is sent. Three new tests.
   - Windows replies: per-conversation draft kept across navigation, restored after a failed send, no duplicate sends while one is pending, undo keeps newer typing (`windows/app/ui/replies.js`, `test/replies.test.cjs`). "That was me" in a menu for ordinary mail, prominent for security notices. Media CSP allows generated voice audio.
 - Verified: Mac `EverydayChecks` ALL CHECKS PASSED (live checks off), 104 Rust core tests, `cargo check -p everyday-app`, 10 Node UI tests, `git diff --check` clean.
-- Still open from Codex's review: thread IDs are not namespaced by account (see the follow-ups above). Gallery placement of the widgets on the user's desktop still to be confirmed by the user.
+- Still open from Codex's review: thread IDs are not namespaced by account (see the follow-ups above). The user confirmed the widgets now appear and work on their desktop.
 
 ### Previous Opus session (all in `49d1f15` unless noted)
 - "That was me": shown up front only for account-security mail (`MailBundler.isSecurityNotice`), otherwise in the "…" and right-click menus; items leave attention lists instantly.
@@ -73,7 +73,6 @@ State of everyday. for whoever picks this up next. Read README.md, ROADMAP.md, W
 - Android groundwork: desktop-only Rust deps gated by target; plan in ANDROID.md.
 
 ## Not done / next
-- Widget launch and timeline rendering are fixed (above). Confirm normal gallery placement on the user's desktop; the eight-widget catalogue and live Weather timeline have been verified in Apple's WidgetKit Simulator.
 - Port this session's Mac features to the Windows app (multi-account, new highlight kinds, briefing sections, shorter button, editable prompt, email formatting, security-only "That was me", new feeds and topics).
 - Mac signed download (needs Developer ID; the release script is implemented, but actual Developer ID signing/notarization remains unverified).
 - Get the legal pages reviewed (the local privacy page no longer labels itself a draft).
