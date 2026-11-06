@@ -92,6 +92,43 @@ struct State {
     sink: Option<Arc<rodio::Sink>>,
 }
 
+/// Crisp QR modules with a four-module quiet zone; pairing codes never enter a log.
+fn pairing_qr(text: &str) -> Result<slint::Image, String> {
+    let qr = qrcode::QrCode::with_error_correction_level(text.as_bytes(), qrcode::EcLevel::M)
+        .map_err(|_| "Couldn't draw this pairing code. Try showing a new one.".to_string())?;
+    let modules = qr.width(); let side = 180; let scale = (side / (modules + 8)).max(1);
+    let margin = (side - modules * scale) / 2;
+    let mut buffer = slint::SharedPixelBuffer::<slint::Rgb8Pixel>::new(side as u32, side as u32);
+    for (i, pixel) in buffer.make_mut_slice().iter_mut().enumerate() {
+        let x = i % side; let y = i / side;
+        let black = x >= margin && y >= margin && x < margin + modules * scale && y < margin + modules * scale
+            && qr[((x - margin) / scale, (y - margin) / scale)] == qrcode::Color::Dark;
+        let v = if black { 0 } else { 255 }; *pixel = slint::Rgb8Pixel::new(v, v, v);
+    }
+    Ok(slint::Image::from_rgb8(buffer))
+}
+
+fn apply_sync_status(ui: &AppWindow, status: &Value) {
+    ui.set_sync_paired(status["paired"].as_bool().unwrap_or(false));
+    ui.set_sync_nearby(status["nearby"].as_i64().unwrap_or(0) as i32);
+    ui.set_sync_error(st(status, "error"));
+    let devices = status["devices"].as_array().cloned().unwrap_or_default();
+    ui.set_sync_devices(model(devices.iter().map(|d| SyncDevice { name: st(d, "name"), when: format!("Synced {}", short_time(d["at"].as_i64().unwrap_or(0))).into() }).collect()));
+}
+
+fn reload_settings(ui: &AppWindow, secrets: &dyn SecretStore, state: &Rc<std::cell::RefCell<State>>) {
+    let state_v = run(secrets, "state", json!({})).unwrap_or(json!({}));
+    let pref = |k: &str| run(secrets, "getPref", json!({"key": k})).ok().and_then(|v| v.as_str().map(String::from)).unwrap_or_default();
+    let name = pref("name"); ui.set_name(name.clone().into()); ui.set_greeting(greeting(&name).into());
+    ui.set_email(st(&state_v, "email")); ui.set_has_key(state_v["hasAiKey"].as_bool().unwrap_or(false));
+    ui.set_onboarded(pref("onboarded") == "1" || std::env::var("EVERYDAY_SKIP_SETUP").is_ok());
+    ui.set_ics(pref("icsUrl").into()); ui.set_morning(pref("morningOn") == "1"); ui.set_hour(pref("morningHour").parse().unwrap_or(7));
+    ui.set_instructions(pref("briefingInstructions").into());
+    let chosen: Vec<String> = pref("categories").split(',').filter(|c| !c.is_empty()).map(String::from).collect();
+    ui.set_topics(topic_rows(&chosen)); state.borrow_mut().chosen = chosen;
+    ui.set_top_interests(run(secrets, "topInterests", json!({})).ok().and_then(|v| v.as_array().map(|a| a.iter().filter_map(|x| x.as_str()).collect::<Vec<_>>().join(", "))).unwrap_or_default().into());
+}
+
 fn main() -> Result<(), slint::PlatformError> {
     let dir = data_dir();
     if let Err(e) = everyday_mobile::init(&dir) { eprintln!("storage: {e}"); }
@@ -132,22 +169,8 @@ fn main() -> Result<(), slint::PlatformError> {
     // First paint.
     {
         let s = &*secrets;
-        let state_v = run(s, "state", json!({})).unwrap_or(json!({}));
-        let pref = |k: &str| run(s, "getPref", json!({"key": k})).ok().and_then(|v| v.as_str().map(String::from)).unwrap_or_default();
-        let name = pref("name");
-        ui.set_name(name.clone().into());
-        ui.set_email(state_v["email"].as_str().unwrap_or_default().into());
-        ui.set_has_key(state_v["hasAiKey"].as_bool().unwrap_or(false));
-        ui.set_onboarded(pref("onboarded") == "1" || std::env::var("EVERYDAY_SKIP_SETUP").is_ok());
+        reload_settings(&ui, s, &state);
         if let Ok(p) = std::env::var("EVERYDAY_PAGE") { ui.set_page(p.parse().unwrap_or(0)); }
-        ui.set_ics(pref("icsUrl").into());
-        ui.set_morning(pref("morningOn") == "1");
-        ui.set_hour(pref("morningHour").parse().unwrap_or(7));
-        ui.set_greeting(greeting(&name).into());
-        ui.set_instructions(pref("briefingInstructions").into());
-        let chosen: Vec<String> = pref("categories").split(',').filter(|c| !c.is_empty()).map(String::from).collect();
-        ui.set_topics(topic_rows(&chosen)); state.borrow_mut().chosen = chosen;
-        ui.set_top_interests(run(s, "topInterests", json!({})).ok().and_then(|v| v.as_array().map(|a| a.iter().filter_map(|x| x.as_str()).collect::<Vec<_>>().join(", "))).unwrap_or_default().into());
         ui.set_date_text(chrono::Local::now().format("%A %-d %B").to_string().into());
         if let Ok(b) = run(s, "lastBriefing", json!({})) { if let Some(t) = b["text"].as_str() { state.borrow_mut().briefing = t.into(); ui.set_briefing(model(sections(t))); } }
         load_local(&ui);
@@ -337,6 +360,71 @@ fn main() -> Result<(), slint::PlatformError> {
                 if let Ok(sink) = rx.recv_timeout(Duration::from_secs(3)) { st8.borrow_mut().sink = Some(sink); } else { ui.set_speaking(false); }
             }
             Err(e) => { ui.set_speaking(false); toast(e); }
+        });
+    } });
+
+    // Poll the shared sync host while open; keep network work off the UI thread.
+    let sync_seen = Rc::new(std::cell::Cell::new(None::<u64>));
+    let sync_polling = Rc::new(std::cell::Cell::new(false));
+    let poll_sync = Rc::new({ let ui_w = ui.as_weak(); let s = secrets.clone(); let ll = load_local.clone(); let st8 = state.clone(); let seen = sync_seen.clone(); let polling = sync_polling.clone(); let toast = toast.clone(); move |start: bool| {
+        let Some(ui) = ui_w.upgrade() else { return };
+        if polling.replace(true) { return; }
+        let ll = ll.clone(); let st8 = st8.clone(); let seen = seen.clone(); let polling = polling.clone(); let toast = toast.clone(); let settings_secrets = s.clone();
+        bg(&ui, &s, move |s| {
+            let status = run(s, if start { "syncStart" } else { "syncStatus" }, json!({}))?;
+            let setup = if status["setupWaiting"].as_bool() == Some(true) { run(s, "syncTakeSetup", json!({}))? } else { Value::Null };
+            Ok::<_, String>((status, setup))
+        }, move |ui, result| {
+            polling.set(false);
+            match result {
+                Ok((status, setup)) => {
+                    apply_sync_status(&ui, &status);
+                    let changes = status["changes"].as_u64().unwrap_or(0);
+                    let changed = seen.get().map_or(changes > 0, |old| changes > old); seen.set(Some(changes));
+                    if changed || setup.is_string() { reload_settings(&ui, &*settings_secrets, &st8); ll(&ui); }
+                    if let Some(message) = setup.as_str() { toast(message.to_string()); }
+                }
+                Err(e) => ui.set_sync_error(e.into()),
+            }
+        });
+    } });
+    poll_sync(true);
+    let sync_tick = Timer::default();
+    sync_tick.start(TimerMode::Repeated, Duration::from_secs(5), { let poll = poll_sync.clone(); move || poll(false) });
+    ui.on_sync_show_code({ let ui_w = ui.as_weak(); let s = secrets.clone(); let poll = poll_sync.clone(); move || {
+        let Some(ui) = ui_w.upgrade() else { return }; if ui.get_sync_busy() { return; }
+        ui.set_sync_busy(true); ui.set_sync_error("".into()); let include = ui.get_sync_include_setup(); let poll = poll.clone();
+        bg(&ui, &s, move |s| run(s, "syncPairingUri", json!({"includeSetup": include})), move |ui, result| {
+            ui.set_sync_busy(false);
+            match result {
+                Ok(v) => { if let Some(code) = v.as_str() { match pairing_qr(code) { Ok(qr) => { ui.set_sync_qr(qr); ui.set_sync_code(code.into()); } Err(e) => ui.set_sync_error(e.into()) } } poll(false); }
+                Err(e) => ui.set_sync_error(e.into()),
+            }
+        });
+    } });
+    ui.on_sync_hide_code({ let ui_w = ui.as_weak(); move || { if let Some(ui) = ui_w.upgrade() { ui.set_sync_code("".into()); ui.set_sync_qr(slint::Image::default()); } } });
+    ui.on_sync_join({ let ui_w = ui.as_weak(); let s = secrets.clone(); let poll = poll_sync.clone(); let toast = toast.clone(); move || {
+        let Some(ui) = ui_w.upgrade() else { return }; let code = ui.get_sync_entered().trim().to_string(); if code.is_empty() || ui.get_sync_busy() { return; }
+        ui.set_sync_busy(true); ui.set_sync_error("".into()); let poll = poll.clone(); let toast = toast.clone();
+        bg(&ui, &s, move |s| run(s, "syncJoin", json!({"uri": code})), move |ui, result| {
+            ui.set_sync_busy(false);
+            match result {
+                Ok(status) => { apply_sync_status(&ui, &status); ui.set_sync_entered("".into()); ui.set_sync_code("".into()); toast("Paired. Syncing over Wi‑Fi.".into()); poll(false); }
+                Err(e) => ui.set_sync_error(e.into()),
+            }
+        });
+    } });
+    ui.on_sync_now({ let ui_w = ui.as_weak(); let s = secrets.clone(); let poll = poll_sync.clone(); move || {
+        let Some(ui) = ui_w.upgrade() else { return }; if ui.get_sync_busy() { return; }
+        ui.set_sync_busy(true); ui.set_sync_error("".into()); let poll = poll.clone();
+        bg(&ui, &s, |s| run(s, "syncNow", json!({})), move |ui, result| { ui.set_sync_busy(false); if let Err(e) = result { ui.set_sync_error(e.into()); } else { poll(false); } });
+    } });
+    ui.on_sync_leave({ let ui_w = ui.as_weak(); let s = secrets.clone(); let toast = toast.clone(); move || {
+        let Some(ui) = ui_w.upgrade() else { return }; if ui.get_sync_busy() { return; }
+        ui.set_sync_busy(true); let toast = toast.clone();
+        bg(&ui, &s, |s| run(s, "syncLeave", json!({})), move |ui, result| {
+            ui.set_sync_busy(false);
+            match result { Ok(_) => { apply_sync_status(&ui, &json!({})); ui.set_sync_code("".into()); ui.set_sync_qr(slint::Image::default()); toast("This PC no longer syncs.".into()); } Err(e) => ui.set_sync_error(e.into()) }
         });
     } });
 

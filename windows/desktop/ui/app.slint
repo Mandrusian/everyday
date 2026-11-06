@@ -11,6 +11,7 @@ export struct Turn { mine: bool, text: string, sources: string }
 export struct EventRow { title: string, when: string }
 export struct Topic { id: string, name: string, on: bool, index: int }
 export struct TopicRow { items: [Topic] }
+export struct SyncDevice { name: string, when: string }
 export struct ReplyChip { label: string, handled: bool, index: int }
 
 export global Ink {
@@ -97,6 +98,7 @@ component Field inherits VerticalLayout {
     in property <string> label;
     in property <string> placeholder;
     in property <bool> secret;
+    in property <bool> read-only;
     in property <bool> multi;
     in-out property <string> text <=> input.text;
     callback accepted();
@@ -113,6 +115,7 @@ component Field inherits VerticalLayout {
             x: 13px; y: root.multi ? 11px : (parent.height - self.height) / 2; width: parent.width - 26px; height: root.multi ? parent.height - 22px : self.preferred-height;
             color: Ink.text; font-size: 14.5px; selection-background-color: Ink.clay-soft; selection-foreground-color: Ink.text;
             input-type: root.secret ? InputType.password : InputType.text;
+            read-only: root.read-only;
             single-line: !root.multi; wrap: root.multi ? word-wrap : no-wrap;
             accepted => { root.accepted(); }
             edited => { root.edited(); }
@@ -601,6 +604,71 @@ component SettingsTab inherits Rectangle {
     ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
 }
 
+// Pairing stays on this computer; codes are shown only when explicitly requested.
+component SyncPane inherits VerticalLayout {
+    in property <bool> paired;
+    in property <int> nearby;
+    in property <[SyncDevice]> devices;
+    in property <string> error;
+    in property <bool> busy;
+    in property <string> code;
+    in property <image> qr;
+    in-out property <bool> include-setup: true;
+    in-out property <string> entered;
+    callback show-code; callback hide-code; callback join; callback sync-now; callback leave;
+    spacing: 12px;
+    Para { text: "Keep tasks, news topics and handled mail the same on your Mac, Android phone and Windows PC. Devices talk directly over your Wi‑Fi, encrypted with a key only they hold. Nothing goes through a server."; color: Ink.text2; font-size: 15px; }
+    Rectangle { height: 6px; }
+    Label { text: "This PC"; }
+    if !root.paired: Text { text: "Not paired yet."; color: Ink.text2; font-size: 15px; }
+    if root.paired: HorizontalLayout {
+        spacing: 12px;
+        Para { text: root.nearby == 0 ? "Paired. Looking for your other devices on this network." : root.nearby + (root.nearby == 1 ? " device nearby." : " devices nearby."); color: Ink.text2; font-size: 15px; horizontal-stretch: 1; }
+        Button { text: root.busy ? "Syncing…" : "Sync now"; enabled: !root.busy; clicked => { root.sync-now(); } }
+    }
+    for d in root.devices: HorizontalLayout {
+        spacing: 12px;
+        Text { text: d.name; color: Ink.text; font-size: 15px; horizontal-stretch: 1; overflow: elide; }
+        Text { text: d.when; color: Ink.text3; font-size: 13px; }
+    }
+    if root.error != "": Para { text: root.error; color: Ink.alert; font-size: 13px; }
+    Rectangle { height: 6px; }
+    Label { text: "Add a device"; }
+    Para { text: "On the other device, open Settings → Sync and scan this code, or type it in."; color: Ink.text2; font-size: 14px; }
+    if root.code == "": VerticalLayout {
+        spacing: 12px;
+        HorizontalLayout {
+            spacing: 12px;
+            VerticalLayout {
+                spacing: 4px; horizontal-stretch: 1;
+                Text { text: "Include my accounts and keys"; color: Ink.text; font-size: 15px; }
+                Para { text: "Quick setup: the new device gets your mail accounts and passwords, AI keys and settings, so there's nothing to type. The code works once, for 10 minutes."; color: Ink.text2; font-size: 13px; }
+            }
+            Switch { checked <=> root.include-setup; }
+        }
+        HorizontalLayout { alignment: start; Button { text: "Show pairing code"; primary: true; enabled: !root.busy; clicked => { root.show-code(); } } }
+    }
+    if root.code != "": Appear { VerticalLayout {
+        spacing: 10px;
+        HorizontalLayout { alignment: start; Rectangle {
+            width: 200px; height: 200px; background: white; border-radius: 12px;
+            Image { x: 10px; y: 10px; width: 180px; height: 180px; source: root.qr; image-fit: contain; }
+        } }
+        // An editable field supports the usual select/copy keyboard shortcuts.
+        Field { label: "Pairing code"; text: root.code; read-only: true; }
+        Para { text: root.include-setup ? "This code carries your mail passwords and AI keys for the next 10 minutes. Only show it to your own devices." : "Anyone with this code can join your devices. Only show it to your own."; color: Ink.text3; font-size: 12.5px; }
+        HorizontalLayout { alignment: start; Button { text: "Hide code"; clicked => { root.hide-code(); } } }
+    } }
+    Rectangle { height: 6px; }
+    Label { text: "Join another device"; }
+    HorizontalLayout {
+        spacing: 10px;
+        Field { placeholder: "Paste the code from your other device"; text <=> root.entered; horizontal-stretch: 1; accepted => { if root.entered != "" && !root.busy { root.join(); } } }
+        Button { text: "Join"; enabled: root.entered != "" && !root.busy; clicked => { root.join(); } }
+    }
+    if root.paired: HorizontalLayout { alignment: start; Button { text: "Stop syncing on this PC"; danger: true; enabled: !root.busy; clicked => { root.leave(); } } }
+}
+
 // Settings in tabs, like the Mac app: one topic per pane.
 component SettingsPage inherits HorizontalLayout {
     in-out property <int> tab;
@@ -615,6 +683,10 @@ component SettingsPage inherits HorizontalLayout {
     in property <[TopicRow]> topics;
     in property <string> top-interests;
     in-out property <int> provider; in-out property <string> mail-email; in-out property <string> mail-password; in property <bool> busy; in property <string> error; in property <string> key-note;
+    in property <bool> sync-paired; in property <int> sync-nearby; in property <[SyncDevice]> sync-devices;
+    in property <string> sync-error; in property <bool> sync-busy; in property <string> sync-code; in property <image> sync-qr;
+    in-out property <bool> sync-include-setup: true; in-out property <string> sync-entered;
+    callback sync-show-code; callback sync-hide-code; callback sync-join; callback sync-now; callback sync-leave;
     callback save-name; callback save-ics; callback save-morning; callback connect; callback disconnect; callback save-key; callback save-instructions;
     callback toggle-topic(int); callback train; callback reset-interests;
     Rectangle {
@@ -623,7 +695,7 @@ component SettingsPage inherits HorizontalLayout {
             padding: 24px; padding-top: 34px; padding-right: 10px; spacing: 2px; alignment: start;
             Text { text: "Settings"; font-family: Ink.serif; font-size: 26px; color: Ink.text; }
             Rectangle { height: 14px; }
-            for t[i] in ["General", "Accounts", "AI provider", "Briefing", "Interests", "Calendar", "About"]: SettingsTab { text: t; on: root.tab == i; clicked => { root.tab = i; } }
+            for t[i] in ["General", "Accounts", "AI provider", "Briefing", "Interests", "Calendar", "Sync", "About"]: SettingsTab { text: t; on: root.tab == i; clicked => { root.tab = i; } }
         }
     }
     Rectangle { width: 1px; background: Ink.line; }
@@ -676,7 +748,12 @@ component SettingsPage inherits HorizontalLayout {
                 HorizontalLayout { Field { label: "Calendar link (.ics)"; placeholder: "https://… from Google, Outlook or iCloud"; text <=> root.ics; edited => { root.save-ics(); } max-width: 560px; } }
                 Para { text: "In Google Calendar: Settings, your calendar, “Secret address in iCal format”. Outlook and iCloud can publish one too. everyday. only reads it."; color: Ink.text2; font-size: 13.5px; }
             } }
-            if root.tab == 6: Appear { VerticalLayout {
+            if root.tab == 6: Appear { SyncPane {
+                paired: root.sync-paired; nearby: root.sync-nearby; devices: root.sync-devices; error: root.sync-error; busy: root.sync-busy;
+                code: root.sync-code; qr: root.sync-qr; include-setup <=> root.sync-include-setup; entered <=> root.sync-entered;
+                show-code => { root.sync-show-code(); } hide-code => { root.sync-hide-code(); } join => { root.sync-join(); } sync-now => { root.sync-now(); } leave => { root.sync-leave(); }
+            } }
+            if root.tab == 7: Appear { VerticalLayout {
                 spacing: 10px;
                 Wordmark { size: 34px; }
                 Text { text: "Version 0.2"; color: Ink.text2; font-size: 14px; }
@@ -775,6 +852,10 @@ export component AppWindow inherits Window {
     in property <[TopicRow]> topics; in property <string> top-interests; in-out property <string> instructions; in-out property <int> settings-tab;
     in-out property <bool> collapsed;
 
+    in property <bool> sync-paired; in property <int> sync-nearby; in property <[SyncDevice]> sync-devices;
+    in property <string> sync-error; in property <bool> sync-busy; in property <string> sync-code; in property <image> sync-qr;
+    in-out property <bool> sync-include-setup: true; in-out property <string> sync-entered;
+    callback sync-show-code; callback sync-hide-code; callback sync-join; callback sync-now; callback sync-leave;
     callback toggle-topic(int); callback save-topics; callback train; callback reset-interests; callback save-instructions;
     callback refresh; callback write-briefing; callback listen; callback reply(int);
     callback open-thread(string); callback archive; callback trash; callback snooze(int); callback handled; callback send; callback undo;
@@ -855,6 +936,9 @@ export component AppWindow inherits Window {
             if root.page == 3: PageIn { TasksPage { tasks: root.tasks; input <=> root.task-input; add => { root.add-task(); } toggle(t) => { root.toggle-task(t); } delete(t) => { root.delete-task(t); } } }
             if root.page == 4: PageIn { AskPage { turns: root.turns; thinking: root.thinking; has-key: root.has-key; input <=> root.ask-input; ask(q) => { root.ask(q); } } }
             if root.page == 5: PageIn { SettingsPage {
+                sync-paired: root.sync-paired; sync-nearby: root.sync-nearby; sync-devices: root.sync-devices; sync-error: root.sync-error; sync-busy: root.sync-busy;
+                sync-code: root.sync-code; sync-qr: root.sync-qr; sync-include-setup <=> root.sync-include-setup; sync-entered <=> root.sync-entered;
+                sync-show-code => { root.sync-show-code(); } sync-hide-code => { root.sync-hide-code(); } sync-join => { root.sync-join(); } sync-now => { root.sync-now(); } sync-leave => { root.sync-leave(); }
                 tab <=> root.settings-tab; name <=> root.name; email: root.email; has-key: root.has-key; key-input <=> root.key-input; ics <=> root.ics; morning <=> root.morning; hour <=> root.hour;
                 instructions <=> root.instructions; topics: root.topics; top-interests: root.top-interests;
                 provider <=> root.provider; mail-email <=> root.mail-email; mail-password <=> root.mail-password; busy: root.busy; error: root.error; key-note: root.key-note;
