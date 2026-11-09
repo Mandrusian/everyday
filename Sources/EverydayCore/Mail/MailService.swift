@@ -25,11 +25,11 @@ public enum MailAccountError: Error, LocalizedError {
 }
 
 public final class MailService: @unchecked Sendable {
-    private let db: Database
+    let db: Database
     public let auth: GoogleAuth
     public let gmail: GmailBackend
     public let imap: ImapBackend
-    private let intel: Intelligence
+    let intel: Intelligence
     private let prefs: Prefs
 
     public init(db: Database, auth: GoogleAuth, intelligence: Intelligence, prefs: Prefs = .shared, imap: ImapBackend? = nil) {

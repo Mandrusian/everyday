@@ -443,6 +443,37 @@ final class AppModel {
         }
     }
 
+    // MARK: Inbox cleanup ("delete LinkedIn notifications older than a week")
+
+    var showCleanup = false
+    var cleanupPreset: CleanupPlan? = nil
+
+    /// Runs an approved cleanup. Mail leaves the inbox at once; the server is only told after the undo window, so Undo needs no server call.
+    func applyCleanup(_ threadIds: [String], action: MailQuery.Action, saveRule q: MailQuery?) {
+        guard !threadIds.isEmpty else { return }
+        if let q { mail.saveCleanupRule(q) }
+        var removed: [EmailMessage] = []
+        for id in threadIds { removed += mail.removeLocally(threadId: id) }
+        animated { rows.removeAll { threadIds.contains($0.message.threadId) } }
+        if let s = selectedThread, threadIds.contains(s) { selectedThread = nil }
+        reloadMail()
+        var cancelled = false
+        let n = threadIds.count, what = n == 1 ? "1 conversation" : "\(n) conversations"
+        say(action == .trash ? "Moving \(what) to Trash." : "Archiving \(what).", undo: { [weak self] in
+            cancelled = true; self?.mail.restore(removed); self?.reloadMail(); self?.say("Put back. Nothing was changed.")
+        }, seconds: Self.sendDelay)
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(Self.sendDelay * 1_000_000_000))
+            guard let self, !cancelled else { return }
+            do {
+                if action == .trash { try await self.mail.commitTrash(removed, .fromUserAction()) } else { try await self.mail.commitArchive(removed, .fromUserAction()) }
+            } catch {
+                self.mail.restore(removed); self.reloadMail()
+                self.fail(error, "Could not finish. The conversations are back in your inbox")
+            }
+        }
+    }
+
     func toggleVIP(_ address: String) {
         let on = !mail.isVIP(address)
         mail.setVIP(address, on); reloadMail()

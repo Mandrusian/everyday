@@ -153,6 +153,7 @@ struct RulesSection: View {
     @Environment(AppModel.self) private var model
     @Local private var rules: [MailRule] = []
     @Local private var vips: [String] = []
+    @Local private var cleanups: [CleanupRule] = []
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             SectionLabel("Mail you've told it to ignore").padding(.top, 8)
@@ -161,13 +162,19 @@ struct RulesSection: View {
                 HStack { Text(r.summary).font(.ui(15)); Spacer(); Button("Remove") { model.mail.removeRule(r); rules = model.mail.rules(); model.reloadMail(); model.reloadTasks() }.buttonStyle(QuietButtonStyle(compact: true)) }
                     .padding(.vertical, 6).overlay(alignment: .bottom) { Hairline() }
             }
+            SectionLabel("Saved cleanups").padding(.top, 14)
+            if cleanups.isEmpty { Text("None yet. Use Clear out mail in the inbox and tick “Offer this again”. Saved cleanups never run by themselves; you review each one.").font(.ui(14.5)).foregroundStyle(Palette.text3) }
+            ForEach(cleanups) { c in
+                HStack { Text(c.query.plainDescription).font(.ui(15)); Spacer(); Button("Remove") { model.mail.removeCleanupRule(c); cleanups = model.mail.cleanupRules() }.buttonStyle(QuietButtonStyle(compact: true)) }
+                    .padding(.vertical, 6).overlay(alignment: .bottom) { Hairline() }
+            }
             SectionLabel("VIP senders").padding(.top, 14)
             if vips.isEmpty { Text("None yet. Choose “Always important (VIP)” on a conversation. Their mail always rises to the top.").font(.ui(14.5)).foregroundStyle(Palette.text3) }
             ForEach(vips, id: \.self) { a in
                 HStack { Text(a).font(.ui(15)); Spacer(); Button("Remove") { model.mail.setVIP(a, false); vips = model.mail.vips(); model.reloadMail() }.buttonStyle(QuietButtonStyle(compact: true)) }
                     .padding(.vertical, 6).overlay(alignment: .bottom) { Hairline() }
             }
-        }.onAppear { rules = model.mail.rules(); vips = model.mail.vips() }
+        }.onAppear { rules = model.mail.rules(); vips = model.mail.vips(); cleanups = model.mail.cleanupRules() }
     }
 }
 

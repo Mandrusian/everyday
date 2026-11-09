@@ -8,6 +8,7 @@ struct InboxView: View {
     @Local private var active = ""   // debounced search text
     @FocusState private var keysFocused: Bool
     @Local private var showBulk = false
+    @Local private var pendingCleanups: [CleanupPlan] = []
     private var bulkRows: [MailRow] { model.rows.filter { r in (r.triage.map { $0.category == .newsletter || $0.category == .promo } ?? false) && !model.mail.isVIP(r.message.fromAddress) } }
 
     private var filtered: [MailRow] {
@@ -77,6 +78,8 @@ struct InboxView: View {
             }
             .animation(Motion.snappy, value: model.rows.map(\.id))
             .sheet(isPresented: $showBulk) { BulkArchiveSheet(rows: bulkRows) }
+            .sheet(isPresented: Binding(get: { model.showCleanup }, set: { model.showCleanup = $0; if !$0 { model.cleanupPreset = nil } })) { CleanupSheet(preset: model.cleanupPreset) }
+            .task(id: model.rows.count) { pendingCleanups = model.mail.pendingCleanups() }
             .focusable().focused($keysFocused).focusEffectDisabled()
             .onKeyPress(characters: CharacterSet(charactersIn: "jkeuh#"), phases: .down) { handleKey($0.characters) }
             .onAppear { keysFocused = true; if model.selectedThread == nil && model.selectedBundleID == nil { model.selectedThread = filtered.first?.message.threadId } }
@@ -89,6 +92,7 @@ struct InboxView: View {
             PaneHeader(title: "Inbox", subtitle: model.triaging ? "Sorting…" : "Sorted by priority") {
                 if model.syncingMail { ProgressView().controlSize(.small) }
                 if model.inboxFilter == .newsletters, !bulkRows.isEmpty { Button("Review & archive…") { showBulk = true }.buttonStyle(QuietButtonStyle(compact: true)).help("See the list first. Nothing is archived until you confirm.") }
+                Button { model.cleanupPreset = nil; model.showCleanup = true } label: { Image(systemName: "wand.and.sparkles") }.buttonStyle(QuietButtonStyle(compact: true)).accessibilityLabel("Clear out mail").help("Tell the AI which emails to delete or archive. You approve the plan and the list first.")
                 Button { Task { await model.syncMail() } } label: { Image(systemName: "arrow.clockwise") }.buttonStyle(QuietButtonStyle(compact: true)).accessibilityLabel("Sync mail").help("Sync mail")
             }
             VStack(spacing: 10) {
@@ -105,6 +109,7 @@ struct InboxView: View {
                         }
                     }
                 }
+                if !pendingCleanups.isEmpty { PendingCleanupBar(plans: pendingCleanups) }
             }.padding(.horizontal, 20).padding(.vertical, 12)
             Hairline()
             if model.syncingMail && model.rows.isEmpty {

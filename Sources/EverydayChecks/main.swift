@@ -83,6 +83,21 @@ check("skim: strip removes tags", SkimMarkup.strip(sk) == "Pay the invoice by Fr
 check("skim: unclosed tag does not leak", !SkimMarkup.strip("Meeting <<d|Friday at noon").contains("<<"), SkimMarkup.strip("Meeting <<d|Friday at noon"))
 check("skim: limit keeps first N highlights", SkimMarkup.segments(SkimMarkup.limit("<<u|a>> <<d|b>> <<p|c>>", max: 2)).filter { $0.kind != nil }.count == 2 && SkimMarkup.strip(SkimMarkup.limit("<<u|a>> <<d|b>> <<p|c>>", max: 2)) == "a b c")
 check("skim: plain text unchanged", SkimMarkup.strip("Nothing special.") == "Nothing special." && !SkimMarkup.hasTags("Nothing special."))
+// Inbox cleanup: the AI only describes a filter; matching and safety are local.
+do {
+    let q = try Intelligence.parseMailQuery(#"{"action":"trash","senders":["linkedin"],"subjects":[],"words":[],"categories":["important","promo"],"olderThanDays":7,"unreadOnly":false,"automatedOnly":true,"summary":"LinkedIn notifications older than a week","unclear":null}"#)
+    check("cleanup: parses trash filter, drops important category", q.action == .trash && q.senders == ["linkedin"] && q.categories == [.promo] && q.olderThanDays == 7 && q.automatedOnly)
+    var li = EmailMessage(id: "c1", threadId: "t1", fromName: "LinkedIn", fromAddress: "notifications@linkedin.com", to: "", subject: "You appeared in 3 searches", snippet: "", body: "", date: Date().addingTimeInterval(-10 * 86400), labelIds: ["INBOX"], hasAttachments: false)
+    check("cleanup: matches old LinkedIn notification", q.matches(li, triage: nil))
+    li.date = Date().addingTimeInterval(-86400)
+    check("cleanup: skips newer than olderThanDays", !q.matches(li, triage: nil))
+    let person = EmailMessage(id: "c2", threadId: "t2", fromName: "Oscar via LinkedIn", fromAddress: "oscar@example.com", to: "", subject: "Coffee?", snippet: "", body: "", date: Date().addingTimeInterval(-10 * 86400), labelIds: ["INBOX"], hasAttachments: false)
+    check("cleanup: automatedOnly leaves people alone", !q.matches(person, triage: nil))
+    check("cleanup: plain description says what it does", q.plainDescription.hasPrefix("Move to Trash mail from linkedin"), q.plainDescription)
+} catch { check("cleanup: parse", false, "\(error)") }
+check("cleanup: refuses match-everything filter", (try? Intelligence.parseMailQuery(#"{"action":"trash","senders":[],"subjects":[],"words":[],"categories":[]}"#)) == nil)
+check("cleanup: unclear request becomes a question", { do { _ = try Intelligence.parseMailQuery(#"{"unclear":"Which emails do you mean?"}"#); return false } catch let e as CleanupError { return e.errorDescription == "Which emails do you mean?" } catch { return false } }())
+check("cleanup: empty query matches nothing", !MailQuery(action: .trash).matches(EmailMessage(id: "x", threadId: "x", fromName: "a", fromAddress: "a@b.c", to: "", subject: "s", snippet: "", body: "", date: .distantPast, labelIds: ["INBOX"], hasAttachments: false), triage: nil))
 check("markdown: lists and paragraphs", Markdown.blocks("Intro line\n- **One** item\n2. Two") == [.paragraph("Intro line"), .bullet("**One** item"), .numbered("2.", "Two")])
 check("markdown: plain strips inline marks", Markdown.plain("**Bold** and *it* with [link](https://x.y) `c`") == "Bold and it with link c", Markdown.plain("**Bold** and *it* with [link](https://x.y) `c`"))
 check("briefing: tagged heading is clean", Briefing.sections("## <<d|Today>>\nHello").first?.heading == "Today")
