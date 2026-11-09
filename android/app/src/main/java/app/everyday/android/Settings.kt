@@ -70,15 +70,20 @@ fun AiKeySetup(model: AppModel, onDone: () -> Unit) {
     }
 }
 
+private fun prefList(raw: String): List<String> = runCatching {
+    val a = org.json.JSONArray(raw)
+    (0 until a.length()).map { a.getString(it).trim() }.filter { it.isNotBlank() }
+}.getOrElse { raw.split(',').map(String::trim).filter(String::isNotBlank) }.distinctBy { it.lowercase() }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsSheet(model: AppModel, onClose: () -> Unit) {
     val p = pal(); val scope = rememberCoroutineScope()
+    var pane by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("General") }
     var name by remember { mutableStateOf(model.name) }
     var ics by remember { mutableStateOf("") }
     var morning by remember { mutableStateOf(false) }
     var hour by remember { mutableIntStateOf(7) }
-    var editMail by remember { mutableStateOf(false) }
     var editKey by remember { mutableStateOf(false) }
     var training by remember { mutableStateOf(false) }
     if (training) androidx.compose.ui.window.Dialog({ training = false; scope.launch { model.loadLocal() } }, androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
@@ -93,55 +98,138 @@ fun SettingsSheet(model: AppModel, onClose: () -> Unit) {
         hour = (Core.run("getPref", json("key" to "morningHour")) as String).toIntOrNull() ?: 7
     }
     ModalBottomSheet(onClose, containerColor = p.paper, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-        Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 22.dp).padding(bottom = 40.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("Settings", style = Type.heading, color = p.text, modifier = Modifier.padding(bottom = 12.dp))
-
-            SectionLabel("You")
-            Field("First name", name, { name = it; model.name = it.trim(); model.setPref("name", it.trim()) }, placeholder = "For the greeting and briefing")
-
-            SectionLabel("Mail", Modifier.padding(top = 18.dp))
-            if (model.email != null && !editMail) Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(model.email!!, style = Type.body, color = p.text, modifier = Modifier.weight(1f))
-                QuietButton("Disconnect", { scope.launch { Core.run("disconnectMail"); Core.forget("imap.password.${model.email!!.lowercase()}"); model.email = null; model.loadLocal() } })
-            } else MailSetup(model) { editMail = false }
-
-            SectionLabel("AI", Modifier.padding(top = 18.dp))
-            if (model.hasAiKey && !editKey) Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Gemini key saved", style = Type.body, color = p.text, modifier = Modifier.weight(1f))
-                QuietButton("Replace", { editKey = true })
-            } else AiKeySetup(model) { editKey = false }
-
-            SectionLabel("Interests", Modifier.padding(top = 18.dp))
-            Text("Top stories lean towards these. Tap to add or remove.", style = Type.small, color = p.text2, modifier = Modifier.padding(bottom = 8.dp))
-            TopicPicker(model)
-            Text(if (model.learned.isEmpty()) "Nothing learned yet. Swipe a few stories to teach it." else "It has learned: " + model.learned.joinToString(", "), style = Type.small, color = p.text, modifier = Modifier.padding(top = 12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 8.dp)) {
-                QuietButton("Train with more stories", { training = true })
-                QuietButton("Start over", { model.resetInterests() })
+        Column(Modifier.fillMaxHeight(0.94f)) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 22.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Settings", style = Type.heading, color = p.text, modifier = Modifier.weight(1f))
+                TextButton(onClose) { Text("Done", color = p.clay) }
             }
-
-            SectionLabel("Calendar", Modifier.padding(top = 18.dp))
-            Field("Calendar link (.ics)", ics, { ics = it.trim(); model.setPref("icsUrl", it.trim()) }, placeholder = "https://… from Google, Outlook or iCloud", keyboard = KeyboardType.Uri)
-            Text("In Google Calendar: Settings, your calendar, “Secret address in iCal format”. Read-only.", style = Type.small, color = p.text2)
-
-            SectionLabel("Morning briefing", Modifier.padding(top = 18.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Write it each morning", style = Type.body, color = p.text)
-                    Text("A notification at $hour:00 when it's ready.", style = Type.small, color = p.text2)
+            Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 22.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("General", "Briefing", "Accounts", "AI provider", "Interests", "Notifications", "Sync").forEach { title -> Chip(title, { pane = title }, accent = pane == title) }
+            }
+            Hairline()
+            key(pane) { Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 22.dp, vertical = 20.dp).padding(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                when (pane) {
+                    "General" -> {
+                        Field("Your first name", name, { name = it; model.name = it.trim(); model.setPref("name", it.trim()) })
+                        Spacer(Modifier.height(12.dp))
+                        Text("everyday. is free and open source (GPL-3.0). Your mail stays on this phone.", style = Type.small, color = p.text3)
+                    }
+                    "Briefing" -> BriefingSettings(model)
+                    "Accounts" -> {
+                        SectionLabel("Mail")
+                        if (model.email != null) Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(model.email!!, style = Type.body, color = p.text, modifier = Modifier.weight(1f))
+                            QuietButton("Disconnect", { scope.launch { Core.run("disconnectMail"); Core.forget("imap.password.${model.email!!.lowercase()}"); model.email = null; model.loadLocal() } })
+                        } else MailSetup(model) {}
+                        SectionLabel("Calendar", Modifier.padding(top = 12.dp))
+                        Field("Calendar link (.ics)", ics, { ics = it.trim(); model.setPref("icsUrl", it.trim()) }, placeholder = "https://… from Google, Outlook or iCloud", keyboard = KeyboardType.Uri)
+                        Text("In Google Calendar: Settings, your calendar, “Secret address in iCal format”. Read-only.", style = Type.small, color = p.text2)
+                    }
+                    "AI provider" -> {
+                        if (model.hasAiKey && !editKey) Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Gemini key saved", style = Type.body, color = p.text, modifier = Modifier.weight(1f))
+                            QuietButton("Replace", { editKey = true })
+                        } else AiKeySetup(model) { editKey = false }
+                    }
+                    "Interests" -> {
+                        Text("everyday. learns what you like from the categories you pick and the stories you swipe on. It all stays on this phone.", style = Type.small, color = p.text2)
+                        SectionLabel("What it has learned")
+                        Text(if (model.learned.isEmpty()) "Nothing yet. Swipe through some stories to teach it." else model.learned.joinToString(", "), style = Type.body, color = p.text)
+                        TopicListEditor(model, "followedTopics", "Your own topics", "Follow anything by name, like “Formula 1”, “Cairns” or “Rust”. Stories that mention it rise to the top, and it gets its own tab in News.", "Follow a topic", "Follow")
+                        SectionLabel("Categories", Modifier.padding(top = 12.dp))
+                        TopicPicker(model)
+                        QuietButton("Retrain with a swipe deck", { training = true })
+                        QuietButton("Reset everything learned", { model.resetInterests() })
+                    }
+                    "Notifications" -> {
+                        SettingSwitch("Morning briefing", "Writes your briefing at this time and sends a notification with the first lines.", morning) { morning = it; model.setPref("morningOn", if (it) "1" else "0") }
+                        if (morning) Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            (4..12).forEach { hr -> Chip("$hr:00", { hour = hr; model.setPref("morningHour", "$hr") }, accent = hour == hr) }
+                        }
+                    }
+                    "Sync" -> SyncSection()
                 }
-                Switch(morning, { morning = it; model.setPref("morningOn", if (it) "1" else "0") }, colors = SwitchDefaults.colors(checkedTrackColor = p.clay, checkedThumbColor = p.paper, uncheckedTrackColor = p.line, uncheckedBorderColor = p.line, uncheckedThumbColor = p.paper))
-            }
-            if (morning) Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp)) {
-                listOf(6, 7, 8, 9).forEach { hr -> Chip("$hr:00", { hour = hr; model.setPref("morningHour", "$hr") }, accent = hour == hr) }
-            }
-            SectionLabel("Sync", Modifier.padding(top = 18.dp))
-            SyncSection()
-
-            Spacer(Modifier.height(24.dp))
-            Text("everyday. is free and open source (GPL-3.0). Your mail stays on this phone.", style = Type.small, color = p.text3)
+            } }
         }
     }
+}
+
+@Composable
+private fun SettingSwitch(title: String, detail: String, checked: Boolean, enabled: Boolean = true, change: (Boolean) -> Unit) {
+    val p = pal()
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = Type.body, color = p.text)
+            if (detail.isNotBlank()) Text(detail, style = Type.small, color = p.text2)
+        }
+        Switch(checked, change, enabled = enabled, colors = SwitchDefaults.colors(checkedTrackColor = p.clay, checkedThumbColor = p.paper, uncheckedTrackColor = p.line, uncheckedBorderColor = p.line, uncheckedThumbColor = p.paper))
+    }
+}
+
+@Composable
+private fun BriefingSettings(model: AppModel) {
+    val p = pal()
+    val titles = listOf(Triple("mail", "Mail that needs me", "Replies owed and deadlines"), Triple("calendar", "Calendar", "Today's events"), Triple("weather", "Weather", "One line"), Triple("news", "News", "A few top stories"), Triple("tasks", "Tasks", "What is open and due"))
+    var sections by remember { mutableStateOf(titles.map { it.first }.toSet()) }
+    var count by remember { mutableIntStateOf(3) }
+    var instructions by remember { mutableStateOf("") }
+    var loaded by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        val raw = Core.run("getPref", json("key" to "briefingSections")) as String
+        sections = if (raw.isBlank()) titles.map { it.first }.toSet() else prefList(raw).toSet()
+        count = (Core.run("getPref", json("key" to "briefingNewsCount")) as String).toIntOrNull()?.coerceIn(0, 8) ?: 3
+        instructions = Core.run("getPref", json("key" to "briefingInstructions")) as String
+        loaded = true
+    }
+    Text("Tell everyday. what you want to see each morning. Changes apply the next time a briefing is written.", style = Type.body, color = p.text2)
+    if (!loaded) Text("Loading…", style = Type.small, color = p.text3)
+    else {
+        SectionLabel("Include")
+        titles.forEach { (id, title, detail) ->
+            SettingSwitch(title, if (id == "weather") "One line · not available on this phone yet" else detail, id in sections, enabled = id != "weather") { on ->
+                sections = if (on) sections + id else sections - id
+                model.setPref("briefingSections", org.json.JSONArray(titles.map { it.first }.filter { it in sections }).toString())
+            }
+        }
+        SectionLabel("Stories to mention", Modifier.padding(top = 12.dp))
+        Text("How many news stories the briefing may cover. Zero leaves news out.", style = Type.small, color = p.text2)
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            (0..8).forEach { n -> Chip("$n", { count = n; model.setPref("briefingNewsCount", "$n") }, accent = count == n) }
+        }
+        SectionLabel("In your own words", Modifier.padding(top = 12.dp))
+        Text("Standing instructions the AI follows every time. For example: “Skip anything about Hong Kong and chip makers. I care about AI policy, aviation and Australian politics. Keep it under 100 words.”", style = Type.small, color = p.text2)
+        Field("Standing instructions for the briefing", instructions, { instructions = it; model.setPref("briefingInstructions", it) }, singleLine = false, modifier = Modifier.heightIn(min = 110.dp))
+        TopicListEditor(model, "mutedTopics", "Hide these topics everywhere", "Stories mentioning any of these words disappear from the briefing, Top news and the reader's list.", "Hide a topic", "Add")
+        PrimaryButton(if (model.writing) "Writing…" else "Write the briefing now", { model.writeBriefing() }, enabled = !model.writing && model.hasAiKey)
+    }
+}
+
+@Composable
+private fun TopicListEditor(model: AppModel, pref: String, title: String, detail: String, label: String, action: String) {
+    val p = pal(); val scope = rememberCoroutineScope()
+    var topics by remember(pref) { mutableStateOf(emptyList<String>()) }
+    var input by remember(pref) { mutableStateOf("") }
+    var loaded by remember(pref) { mutableStateOf(false) }
+    var error by remember(pref) { mutableStateOf<String?>(null) }
+    var saving by remember(pref) { mutableStateOf(false) }
+    LaunchedEffect(pref) { topics = prefList(Core.run("getPref", json("key" to pref)) as String); loaded = true }
+    fun save(next: List<String>) { scope.launch {
+        saving = true
+        try { Core.run("setPref", json("key" to pref, "value" to org.json.JSONArray(next).toString())); topics = next; input = ""; error = null; model.loadLocal() }
+        catch (e: Core.Failure) { error = e.message }
+        finally { saving = false }
+    } }
+    SectionLabel(title, Modifier.padding(top = 12.dp))
+    Text(detail, style = Type.small, color = p.text2)
+    Field(label, input, { input = it }, placeholder = if (action == "Follow") "Add a topic" else "Add a word or phrase")
+    QuietButton(action, { val t = input.trim(); if (t.isNotEmpty() && topics.none { it.equals(t, true) }) save(topics + t) }, enabled = loaded && !saving && input.isNotBlank() && topics.none { it.equals(input.trim(), true) })
+    topics.forEach { topic ->
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(topic, style = Type.body, color = p.text, modifier = Modifier.weight(1f))
+            TextButton({ save(topics - topic) }, enabled = !saving) { Text(if (action == "Follow") "Stop following" else "Remove", color = p.clay) }
+        }
+    }
+    error?.let { Text(it, style = Type.small, color = p.clay) }
 }
 
 

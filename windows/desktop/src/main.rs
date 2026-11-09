@@ -116,7 +116,28 @@ fn apply_sync_status(ui: &AppWindow, status: &Value) {
     ui.set_sync_devices(model(devices.iter().map(|d| SyncDevice { name: st(d, "name"), when: format!("Synced {}", short_time(d["at"].as_i64().unwrap_or(0))).into() }).collect()));
 }
 
+const BRIEFING_OPTIONS: &[(&str, &str, &str)] = &[
+    ("mail", "Mail that needs me", "Replies owed and deadlines"), ("calendar", "Calendar", "Today's events"),
+    ("weather", "Weather", "One line · not available on this computer yet"), ("news", "News", "A few top stories"), ("tasks", "Tasks", "What is open and due")
+];
+
+fn pref_value(s: &dyn SecretStore, key: &str) -> String {
+    run(s, "getPref", json!({"key": key})).ok().and_then(|v| v.as_str().map(String::from)).unwrap_or_default()
+}
+
+fn reload_briefing_topics(ui: &AppWindow, s: &dyn SecretStore) {
+    let raw = pref_value(s, "briefingSections");
+    let selected = if raw.is_empty() { BRIEFING_OPTIONS.iter().map(|(id, _, _)| id.to_string()).collect() } else { everyday_core::news::topic_list(&raw) };
+    ui.set_briefing_options(model(BRIEFING_OPTIONS.iter().map(|(id, title, detail)| BriefingOption { id: (*id).into(), title: (*title).into(), detail: (*detail).into(), on: selected.iter().any(|v| v == id) }).collect()));
+    ui.set_news_count(pref_value(s, "briefingNewsCount").parse::<i32>().unwrap_or(3).clamp(0, 8));
+    let followed = everyday_core::news::topic_list(&pref_value(s, "followedTopics"));
+    if !followed.iter().any(|t| t == ui.get_news_topic().as_str()) { ui.set_news_topic("".into()); }
+    ui.set_followed_topics(model(followed.into_iter().map(Into::into).collect()));
+    ui.set_muted_topics(model(everyday_core::news::topic_list(&pref_value(s, "mutedTopics")).into_iter().map(Into::into).collect()));
+}
+
 fn reload_settings(ui: &AppWindow, secrets: &dyn SecretStore, state: &Rc<std::cell::RefCell<State>>) {
+    reload_briefing_topics(ui, secrets);
     let state_v = run(secrets, "state", json!({})).unwrap_or(json!({}));
     let pref = |k: &str| run(secrets, "getPref", json!({"key": k})).ok().and_then(|v| v.as_str().map(String::from)).unwrap_or_default();
     let name = pref("name"); ui.set_name(name.clone().into()); ui.set_greeting(greeting(&name).into());
@@ -156,6 +177,8 @@ fn main() -> Result<(), slint::PlatformError> {
         let story = |v: &Value| Story { title: st(v, "title"), source: st(v, "source"), summary: skim::strip(v["summary"].as_str().unwrap_or_default()).into(), url: st(v, "url") };
         let stories = run(s, "stories", json!({})).ok().and_then(|v| v.as_array().cloned()).unwrap_or_default();
         ui.set_stories(model(stories.iter().map(story).collect()));
+        let news = if ui.get_news_topic().is_empty() { stories } else { run(s, "stories", json!({"topic": ui.get_news_topic().as_str()})).ok().and_then(|v| v.as_array().cloned()).unwrap_or_default() };
+        ui.set_news_stories(model(news.iter().map(story).collect()));
         let deck = run(s, "swipeDeck", json!({})).ok().and_then(|v| v.as_array().cloned()).unwrap_or_default();
         ui.set_deck(model(deck.iter().map(story).collect()));
         st8.borrow_mut().deck = deck;
@@ -428,6 +451,8 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     } });
 
+    ui.on_select_news_topic({ let ui_w = ui.as_weak(); let ll = load_local.clone(); move |topic| { if let Some(ui) = ui_w.upgrade() { ui.set_news_topic(topic); ll(&ui); } } });
+
     // Settings and setup.
     ui.on_save_name({ let ui_w = ui.as_weak(); let s = secrets.clone(); move || { let Some(ui) = ui_w.upgrade() else { return }; let n = ui.get_name().trim().to_string(); let _ = run(&*s, "setPref", json!({"key": "name", "value": n})); ui.set_greeting(greeting(&n).into()); } });
     ui.on_save_ics({ let ui_w = ui.as_weak(); let s = secrets.clone(); move || { let Some(ui) = ui_w.upgrade() else { return }; let _ = run(&*s, "setPref", json!({"key": "icsUrl", "value": ui.get_ics().trim()})); } });
@@ -483,6 +508,30 @@ fn main() -> Result<(), slint::PlatformError> {
         let _ = run(&*s, "resetInterests", json!({}));
         let chosen = st8.borrow().chosen.clone(); let _ = run(&*s, "seedInterests", json!({"categories": chosen}));
         ui.set_top_interests(it().into()); ll(&ui); toast("Started over from your topics".into());
+    } });
+    ui.on_toggle_briefing({ let ui_w = ui.as_weak(); let s = secrets.clone(); move |id| {
+        let Some(ui) = ui_w.upgrade() else { return };
+        let raw = pref_value(&*s, "briefingSections");
+        let mut selected: Vec<String> = if raw.is_empty() { BRIEFING_OPTIONS.iter().map(|(id, _, _)| id.to_string()).collect() } else { everyday_core::news::topic_list(&raw) };
+        if let Some(index) = selected.iter().position(|v| v == id.as_str()) { selected.remove(index); } else { selected.push(id.to_string()); }
+        if let Err(e) = run(&*s, "setPref", json!({"key": "briefingSections", "value": serde_json::to_string(&selected).unwrap_or_default()})) { ui.set_toast(e.into()); }
+        reload_briefing_topics(&ui, &*s);
+    } });
+    ui.on_save_news_count({ let ui_w = ui.as_weak(); let s = secrets.clone(); move || {
+        let Some(ui) = ui_w.upgrade() else { return };
+        let _ = run(&*s, "setPref", json!({"key": "briefingNewsCount", "value": ui.get_news_count().clamp(0, 8).to_string()}));
+    } });
+    ui.on_topic_action({ let ui_w = ui.as_weak(); let s = secrets.clone(); let ll = load_local.clone(); let toast = toast.clone(); move |topic: SharedString, followed: bool, add: bool| {
+        let Some(ui) = ui_w.upgrade() else { return };
+        let topic = topic.trim(); if topic.is_empty() { return; }
+        let key = if followed { "followedTopics" } else { "mutedTopics" };
+        let mut topics = everyday_core::news::topic_list(&pref_value(&*s, key));
+        if add { if !topics.iter().any(|t| t.eq_ignore_ascii_case(topic)) { topics.push(topic.to_string()); } }
+        else { topics.retain(|t| !t.eq_ignore_ascii_case(topic)); }
+        match run(&*s, "setPref", json!({"key": key, "value": serde_json::to_string(&topics).unwrap_or_default()})) {
+            Ok(_) => { if followed { ui.set_follow_input("".into()); } else { ui.set_mute_input("".into()); } reload_briefing_topics(&ui, &*s); ll(&ui); }
+            Err(e) => toast(e),
+        }
     } });
     ui.on_save_instructions({ let ui_w = ui.as_weak(); let s = secrets.clone(); move || { let Some(ui) = ui_w.upgrade() else { return }; let _ = run(&*s, "setPref", json!({"key": "briefingInstructions", "value": ui.get_instructions().trim()})); } });
     ui.on_finish({ let ui_w = ui.as_weak(); let s = secrets.clone(); move || { let Some(ui) = ui_w.upgrade() else { return }; let _ = run(&*s, "setPref", json!({"key": "onboarded", "value": "1"})); ui.set_onboarded(true); ui.set_page(0); } });

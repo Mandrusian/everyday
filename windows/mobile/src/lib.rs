@@ -61,6 +61,9 @@ fn profile(st: &Store) -> interest::Profile { st.get("profile", "interest").unwr
 fn load_articles(st: &Store, limit: usize) -> Vec<news::Article> {
     st.all::<Value>("article", limit).into_iter().filter_map(|v| Some(news::Article { id: v["id"].as_str()?.into(), title: v["title"].as_str()?.into(), summary: v["summary"].as_str().unwrap_or("").into(), source: v["source"].as_str()?.into(), url: v["url"].as_str()?.into(), published: v["published"].as_i64()?, trust: v["trust"].as_i64().unwrap_or(3) as i32, outside_bubble: false })).collect()
 }
+fn news_options(st: &Store, limit: usize) -> news::Options {
+    news::Options { muted: news::topic_list(&pref(st, "mutedTopics")), followed: news::topic_list(&pref(st, "followedTopics")), limit, ..news::Options::default() }
+}
 fn ai_call(key: &str, r: &ai::Request) -> Result<String, String> { ai::complete(ai::Provider::Gemini, MODEL, key, "", r).map_err(|e| e.to_string()) }
 
 /// Runs one command. `secrets` holds what Kotlin passed in; anything set during the call is returned to be saved.
@@ -149,12 +152,13 @@ pub fn run(cmd: &str, args: &Value, secrets: &dyn SecretStore) -> Result<Value, 
         }
         "stories" => {
             let st = st()?; let prof = profile(&st);
-            let muted: Vec<String> = pref(&st, "mutedTopics").split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
-            json!(news::stories(load_articles(&st, 4000), now_ts(), &news::Options { muted, limit: 40, ..news::Options::default() }, &|x| prof.score(&[], &x.source, &x.title)).into_iter().map(|s| story(s)).collect::<Vec<_>>())
+            let mut options = news_options(&st, 40);
+            options.topic = args["topic"].as_str().map(String::from);
+            json!(news::stories(load_articles(&st, 4000), now_ts(), &options, &|x| prof.score(&[], &x.source, &x.title)).into_iter().map(|s| story(s)).collect::<Vec<_>>())
         }
         "swipeDeck" => {
             let st = st()?; let seen: std::collections::HashSet<String> = st.all::<String>("reacted", 5000).into_iter().collect();
-            json!(news::stories(load_articles(&st, 600), now_ts(), &news::Options { limit: 60, include_outside: true, ..news::Options::default() }, &|_| 0.0).into_iter().filter(|s| !seen.contains(&s.lead.url)).take(12).map(|s| story(s)).collect::<Vec<_>>())
+            json!(news::stories(load_articles(&st, 600), now_ts(), &news_options(&st, 60), &|_| 0.0).into_iter().filter(|s| !seen.contains(&s.lead.url)).take(12).map(|s| story(s)).collect::<Vec<_>>())
         }
         // reaction: 2 love, 1 like, -1 not interested.
         "react" => { let st = st()?; let mut p = profile(&st); p.record(&[], &s(args, "source"), &s(args, "title"), args["reaction"].as_f64().unwrap_or(1.0), now_ts()); let _ = st.put("profile", "interest", 0.0, &p); let _ = st.put("reacted", &s(args, "url"), 0.0, &s(args, "url")); json!(null) }
@@ -171,15 +175,17 @@ pub fn run(cmd: &str, args: &Value, secrets: &dyn SecretStore) -> Result<Value, 
         "aiTest" => json!(ai_call(&need_key()?, &ai::Request { system: "Reply with the single word: ready".into(), messages: vec![(ai::Role::User, "ping".into())], max_tokens: 20, temperature: 0.0, json: false })?),
         "briefing" => {
             let k = need_key()?;
-            let (rows, local, task_lines, news_lines, standing, cal, name) = {
+            let (rows, local, task_lines, news_lines, standing, cal, name, settings) = {
                 let st = st()?; let (_, rows, local) = all_rows(&st);
                 let tl: Vec<String> = tasks::open(&st).iter().map(|t| t.title.clone()).collect();
-                let nl: Vec<String> = news::stories(load_articles(&st, 400), now_ts(), &news::Options { limit: 4, ..news::Options::default() }, &|_| 0.0).into_iter().map(|s| format!("{} ({})", s.lead.title, s.lead.source)).collect();
-                (rows, local, tl, nl, pref(&st, "briefingInstructions"), pref(&st, "icsUrl"), pref(&st, "name"))
+                let settings = briefing::Settings::from_prefs(&pref(&st, "briefingSections"), &pref(&st, "briefingNewsCount"));
+                let prof = profile(&st);
+                let nl: Vec<String> = news::stories(load_articles(&st, 4000), now_ts(), &news_options(&st, settings.news_count), &|x| prof.score(&[], &x.source, &x.title)).into_iter().map(|s| format!("{} ({})", s.lead.title, s.lead.source)).collect();
+                (rows, local, tl, nl, pref(&st, "briefingInstructions"), pref(&st, "icsUrl"), pref(&st, "name"), settings)
             };
-            let cal_line = if cal.is_empty() { None } else { fetch_events(&cal).ok().map(|ev| calendar::summary_line(&ev, chrono::Utc::now(), Local::now().offset().local_minus_utc())) };
+            let cal_line = if !settings.includes("calendar") || cal.is_empty() { None } else { fetch_events(&cal).ok().map(|ev| calendar::summary_line(&ev, chrono::Utc::now(), Local::now().offset().local_minus_utc())) };
             let call = |r: &ai::Request| ai::complete(ai::Provider::Gemini, MODEL, &k, "", r);
-            let text = briefing::generate(&call, &briefing::Inputs { rows: &rows, local: &local, tasks: &task_lines, weather: None, calendar: cal_line, news: &news_lines, standing_instructions: &standing }, if name.is_empty() { "there" } else { &name }, &today()).map_err(|e| e.to_string())?;
+            let text = briefing::generate_with_settings(&call, &briefing::Inputs { rows: &rows, local: &local, tasks: &task_lines, weather: None, calendar: cal_line, news: &news_lines, standing_instructions: &standing }, if name.is_empty() { "there" } else { &name }, &today(), &settings).map_err(|e| e.to_string())?;
             let st = st()?; let _ = st.put("briefing", "latest", now_ts() as f64, &json!({"text": text, "at": now_ts()}));
             json!(text)
         }
@@ -210,7 +216,7 @@ pub fn run(cmd: &str, args: &Value, secrets: &dyn SecretStore) -> Result<Value, 
                 let st = st()?; let (_, rows, local) = all_rows(&st);
                 let tl: Vec<String> = tasks::open(&st).iter().map(|t| t.title.clone()).collect();
                 let prof = profile(&st);
-                let nl: Vec<(String, String)> = news::stories(load_articles(&st, 600), now_ts(), &news::Options { limit: 12, ..news::Options::default() }, &|x| prof.score(&[], &x.source, &x.title)).iter().map(|s| (s.lead.url.clone(), format!("{} ({})", s.lead.title, s.lead.source))).collect();
+                let nl: Vec<(String, String)> = news::stories(load_articles(&st, 600), now_ts(), &news_options(&st, 12), &|x| prof.score(&[], &x.source, &x.title)).iter().map(|s| (s.lead.url.clone(), format!("{} ({})", s.lead.title, s.lead.source))).collect();
                 let (ctx, sources) = chat::build_context(&chat::Context { rows: &rows, local: &local, tasks: &tl, news: &nl, open_item: "" });
                 let name = pref(&st, "name");
                 (chat::system(if name.is_empty() { "there" } else { &name }, &today(), &ctx), sources)
@@ -243,7 +249,7 @@ pub fn run(cmd: &str, args: &Value, secrets: &dyn SecretStore) -> Result<Value, 
             let off = chrono::Duration::seconds(Local::now().offset().local_minus_utc() as i64);
             json!(fetch_events(&url)?.into_iter().take(12).map(|e| json!({ "when": if e.all_day { (e.start + off).format("%a %-d %b, all day").to_string() } else { (e.start + off).format("%a %-d %b, %H:%M").to_string() }, "title": e.title, "location": e.location, "start": e.start.timestamp(), "allDay": e.all_day })).collect::<Vec<_>>())
         }
-        "setPref" => { let _ = st()?.put("pref", &s(args, "key"), 0.0, &s(args, "value")); json!(null) }
+        "setPref" => { st()?.put("pref", &s(args, "key"), 0.0, &s(args, "value")).map_err(|e| e.to_string())?; json!(null) }
         "getPref" => json!(pref(&*st()?, &s(args, "key"))),
         c if c.starts_with("sync") => synchost::run(c, args, secrets)?,
         other => return Err(format!("Unknown command: {other}")),
@@ -331,6 +337,23 @@ mod tests {
         assert!(v["secrets"].as_object().unwrap().is_empty());
         let v: Value = serde_json::from_str(&call_json("nope", "{}")).unwrap();
         assert!(v["err"].as_str().unwrap().contains("Unknown"));
+        // Both UIs use these same preference strings. Muting applies to the feed and training deck.
+        {
+            let st = st().unwrap();
+            for (id, title) in [("prefs-1", "Aviation fuel efficiency improves"), ("prefs-2", "Tennis final tonight preview")] {
+                st.put("article", id, now_ts() as f64, &json!({"id": id, "title": title, "summary": "", "source": "Test", "url": format!("https://example.test/{id}"), "published": now_ts(), "trust": 3})).unwrap();
+            }
+        }
+        let secrets = MemorySecrets::default();
+        run("setPref", &json!({"key":"followedTopics", "value":r#"["Aviation"]"#}), &secrets).unwrap();
+        let stories = run("stories", &json!({}), &secrets).unwrap();
+        assert_eq!(stories[0]["title"], "Aviation fuel efficiency improves");
+        let topic = run("stories", &json!({"topic":"aviation"}), &secrets).unwrap();
+        assert_eq!(topic.as_array().unwrap().len(), 1);
+        run("setPref", &json!({"key":"mutedTopics", "value":r#"["AVIATION"]"#}), &secrets).unwrap();
+        for command in ["stories", "swipeDeck"] {
+            assert!(run(command, &json!({}), &secrets).unwrap().as_array().unwrap().iter().all(|s| !s["title"].as_str().unwrap().contains("Aviation")));
+        }
         assert!(is_security("New sign-in to your Google Account"));
         assert!(!is_security("Your order has shipped"));
     }

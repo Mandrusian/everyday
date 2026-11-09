@@ -135,7 +135,7 @@ fn export_setup(st: &Store, secrets: &HashMap<String, String>) -> Value {
     }
     let mut keys = serde_json::Map::new();
     if let Some(k) = secrets.get("ai.gemini").filter(|k| !k.is_empty()) { keys.insert("gemini".into(), json!(k)); }
-    json!({ "name": pref(st, "name"), "icsUrl": pref(st, "icsUrl"), "categories": cats, "briefingInstructions": pref(st, "briefingInstructions"),
+    json!({ "name": pref(st, "name"), "icsUrl": pref(st, "icsUrl"), "categories": cats, "followedTopics": news::topic_list(&pref(st, "followedTopics")), "mutedTopics": news::topic_list(&pref(st, "mutedTopics")), "briefingInstructions": pref(st, "briefingInstructions"),
             "briefingHour": pref(st, "morningHour").parse::<i64>().unwrap_or(7), "morningOn": pref(st, "morningOn") == "1", "aiProvider": "gemini", "aiKeys": keys, "accounts": accounts })
 }
 
@@ -144,6 +144,9 @@ fn apply_setup(st: &Store, b: &Value, secrets: &dyn SecretStore) -> String {
     let put = |k: &str, v: String| { if !v.is_empty() { let _ = st.put("pref", k, 0.0, &v); } };
     put("name", s(b, "name")); put("icsUrl", s(b, "icsUrl")); put("briefingInstructions", s(b, "briefingInstructions"));
     if let Some(c) = b["categories"].as_array() { put("categories", c.iter().filter_map(|x| x.as_str()).collect::<Vec<_>>().join(",")); }
+    for k in ["followedTopics", "mutedTopics"] {
+        if let Some(v) = b[k].as_array() { put(k, serde_json::to_string(v).unwrap_or_default()); }
+    }
     if let Some(h) = b["briefingHour"].as_i64() { put("morningHour", h.to_string()); }
     if let Some(on) = b["morningOn"].as_bool() { put("morningOn", if on { "1".into() } else { "0".into() }); }
     let mut parts = vec![];

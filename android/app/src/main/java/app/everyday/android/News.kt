@@ -5,6 +5,8 @@ import android.net.Uri
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
@@ -39,13 +41,14 @@ fun NewsScreen(model: AppModel) {
         Column(Modifier.fillMaxSize()) {
             Column(Modifier.statusBarsPadding().padding(start = 20.dp, end = 20.dp, top = 22.dp)) {
                 Text("News", style = Type.title, color = p.text)
-                Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Chip("Top stories", { mode = 0 }, accent = mode == 0)
+                Row(Modifier.horizontalScroll(rememberScrollState()).padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Chip("Top stories", { mode = 0; model.selectNewsTopic(null) }, accent = mode == 0 && model.newsTopic == null)
                     Chip("Teach me", { mode = 1 }, accent = mode == 1)
+                    model.followedTopics.forEach { topic -> Chip(topic, { mode = 0; model.selectNewsTopic(topic) }, accent = mode == 0 && model.newsTopic == topic) }
                 }
             }
             if (mode == 0) LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 24.dp)) {
-                if (model.stories.isEmpty()) item { EmptyNote("No stories yet", "Pull down to fetch the news.") }
+                if (model.stories.isEmpty()) item { EmptyNote(if (model.newsTopic == null) "No stories yet" else "No stories about ${model.newsTopic} yet", "Pull down to fetch the news.") }
                 items(model.stories, key = { it.url }) { s -> StoryRow(s); Hairline() }
             } else Deck(model)
         }

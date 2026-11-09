@@ -23,3 +23,4 @@ ROADMAP.md
 # Release signing: back these up, they are needed for every future update
 android/release.keystore
 android/keystore.properties
+.codex-handover.md

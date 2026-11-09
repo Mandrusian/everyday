@@ -31,6 +31,7 @@ fun AskScreen(model: AppModel) {
     var thinking by remember { mutableStateOf(false) }
     fun send(q: String) {
         if (q.isBlank() || thinking) return
+        if (!model.hasAiKey) { model.toast("Add an AI provider key in Settings first."); return }
         val history = JSONArray(turns.map { t -> JSONObject().put("role", t.role).put("text", t.text) })
         turns = turns + Turn("user", q); input = ""; thinking = true
         scope.launch {
@@ -44,13 +45,20 @@ fun AskScreen(model: AppModel) {
     }
     Column(Modifier.fillMaxSize().imePadding()) {
         Column(Modifier.statusBarsPadding().padding(start = 20.dp, end = 20.dp, top = 22.dp)) {
-            Text("Ask", style = Type.title, color = p.text)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Ask everyday.", style = Type.title, color = p.text, modifier = Modifier.weight(1f))
+                TextButton({ turns = emptyList() }, enabled = turns.isNotEmpty() && !thinking) { Text("Clear", color = if (turns.isNotEmpty() && !thinking) p.clay else p.text3) }
+            }
             Text("About your mail, calendar, tasks and the news. It reads; it never sends or deletes.", style = Type.small, color = p.text2)
         }
         LazyColumn(Modifier.weight(1f), state = list, contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (turns.isEmpty()) item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 12.dp)) {
-                    listOf("What needs me today?", "Did Oscar reply about Thursday?", "Anything due this week?").forEach { Chip(it, { send(it) }) }
+                    listOf("What needs my attention today?", "Which emails are waiting on a reply?", "What are the most important stories this morning?").forEach { q ->
+                        TextButton({ send(q) }, enabled = model.hasAiKey && !thinking, modifier = Modifier.fillMaxWidth()) {
+                            Text(q, style = Type.body, color = if (model.hasAiKey) p.clay else p.text3, modifier = Modifier.fillMaxWidth())
+                        }
+                    }
                 }
             }
             items(turns) { t ->
@@ -66,8 +74,8 @@ fun AskScreen(model: AppModel) {
             if (thinking) item { WritingShimmer() }
         }
         Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.Bottom) {
-            Field("", input, { input = it }, placeholder = if (model.hasAiKey) "Ask anything" else "Add a Gemini key in Settings first", singleLine = false, modifier = Modifier.weight(1f))
-            IconButton({ send(input.trim()) }, Modifier.padding(start = 6.dp).background(if (input.isBlank()) p.line else p.clay, RoundedCornerShape(50)), enabled = input.isNotBlank()) { Icon(Icons.AutoMirrored.Filled.Send, "Ask", tint = p.paper) }
+            Field("", input, { input = it }, placeholder = if (model.hasAiKey) "Ask about your mail, news or tasks" else "Add an AI provider key in Settings first", singleLine = false, modifier = Modifier.weight(1f))
+            IconButton({ send(input.trim()) }, Modifier.padding(start = 6.dp).background(if (input.isBlank() || thinking || !model.hasAiKey) p.line else p.clay, RoundedCornerShape(50)), enabled = input.isNotBlank() && !thinking && model.hasAiKey) { Icon(Icons.AutoMirrored.Filled.Send, "Ask", tint = p.paper) }
         }
     }
 }

@@ -27,8 +27,15 @@ pub fn similar(a: &HashSet<String>, b: &HashSet<String>) -> bool {
     jaccard >= 0.45 || (overlap >= 0.75 && inter >= 4.0)
 }
 
-pub struct Options { pub freshness_hours: f64, pub muted: Vec<String>, pub hide_promos: bool, pub include_outside: bool, pub limit: usize }
-impl Default for Options { fn default() -> Self { Options { freshness_hours: 48.0, muted: vec![], hide_promos: true, include_outside: true, limit: 60 } } }
+pub struct Options { pub freshness_hours: f64, pub muted: Vec<String>, pub followed: Vec<String>, pub topic: Option<String>, pub hide_promos: bool, pub include_outside: bool, pub limit: usize }
+impl Default for Options { fn default() -> Self { Options { freshness_hours: 48.0, muted: vec![], followed: vec![], topic: None, hide_promos: true, include_outside: true, limit: 60 } } }
+
+/// JSON lists preserve commas in a topic. Accept older comma-separated preferences too.
+pub fn topic_list(raw: &str) -> Vec<String> {
+    let values: Vec<String> = serde_json::from_str(raw).unwrap_or_else(|_| raw.split(',').map(String::from).collect());
+    let mut seen = HashSet::new();
+    values.into_iter().map(|v| v.trim().to_string()).filter(|v| !v.is_empty() && seen.insert(v.to_lowercase())).collect()
+}
 
 /// Fresh, de-duplicated, ranked stories. `interest` scores an article from the reader's learned tastes.
 pub fn stories(mut arts: Vec<Article>, now: i64, opt: &Options, interest: &dyn Fn(&Article) -> f64) -> Vec<Story> {
@@ -36,6 +43,9 @@ pub fn stories(mut arts: Vec<Article>, now: i64, opt: &Options, interest: &dyn F
     let muted: Vec<String> = opt.muted.iter().map(|m| m.to_lowercase()).filter(|m| !m.is_empty()).collect();
     arts.retain(|a| a.published >= cutoff);
     if !muted.is_empty() { arts.retain(|a| { let t = format!("{} {}", a.title, a.summary).to_lowercase(); !muted.iter().any(|m| t.contains(m)) }); }
+    if let Some(topic) = opt.topic.as_ref().map(|t| t.trim().to_lowercase()).filter(|t| !t.is_empty()) {
+        arts.retain(|a| format!("{} {}", a.title, a.summary).to_lowercase().contains(&topic));
+    }
     if opt.hide_promos { arts.retain(|a| !is_promo(&a.title)); }
     arts.sort_by(|a, b| b.published.cmp(&a.published));
 
@@ -53,7 +63,9 @@ pub fn stories(mut arts: Vec<Article>, now: i64, opt: &Options, interest: &dyn F
         let recency = (-age_h / 18.0).exp();
         let coverage = ((1 + c.others.len()) as f64).log2() * 0.6;
         let trust = (c.lead.trust - 2) as f64 * 0.3;
-        let score = interest(&c.lead) * 0.5 + recency * 3.0 + coverage + trust;
+        let text = format!("{} {}", c.lead.title, c.lead.summary).to_lowercase();
+        let follow = if opt.followed.iter().any(|t| !t.trim().is_empty() && text.contains(&t.trim().to_lowercase())) { 2.5 } else { 0.0 };
+        let score = interest(&c.lead) * 0.5 + recency * 3.0 + coverage + trust + follow;
         Story { lead: c.lead, others: c.others, score }
     }).collect();
     out.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
@@ -98,6 +110,17 @@ mod tests {
     use super::*;
     const NOW: i64 = 1_800_000_000;
     fn a(id: &str, title: &str, hours_ago: i64, trust: i32) -> Article { Article { id: id.into(), title: title.into(), summary: String::new(), source: "s".into(), url: format!("https://x/{id}"), published: NOW - hours_ago * 3600, trust, outside_bubble: false } }
+    #[test] fn followed_topics_lift_stories_but_muting_takes_priority() {
+        let arts = vec![a("1", "Aviation fuel efficiency improves", 10, 3), a("2", "Tennis final tonight preview", 1, 3)];
+        let mut opt = Options { followed: vec!["AVIATION".into()], ..Options::default() };
+        assert_eq!(stories(arts.clone(), NOW, &opt, &|_| 0.0)[0].lead.id, "1");
+        opt.muted = vec!["aviation".into()];
+        assert_eq!(stories(arts.clone(), NOW, &opt, &|_| 0.0)[0].lead.id, "2");
+        opt.muted.clear(); opt.topic = Some("aviation".into());
+        assert_eq!(stories(arts, NOW, &opt, &|_| 0.0).len(), 1);
+        assert_eq!(topic_list(r#"[" Washington, DC ", "Rust", "rust", ""]"#), ["Washington, DC", "Rust"]);
+        assert_eq!(topic_list(" Rust, aviation "), ["Rust", "aviation"]);
+    }
     #[test] fn promo_headlines_are_filtered_real_news_is_not() {
         assert!(is_promo("Udemy Coupon Codes: 20% Off November 2026") && is_promo("Corsair Discount Code: Up to 50% Off") && is_promo("The best laptop deals of the week"));
         assert!(!is_promo("Uranium cubes reveal why the German nuclear project failed") && !is_promo("Open-source models close the gap"));

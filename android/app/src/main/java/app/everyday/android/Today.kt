@@ -88,26 +88,48 @@ fun BriefingCard(model: AppModel) {
     val p = pal(); val scope = rememberCoroutineScope()
     var player by remember { mutableStateOf<MediaPlayer?>(null) }
     var loadingVoice by remember { mutableStateOf(false) }
+    var paused by remember { mutableStateOf(false) }
     DisposableEffect(Unit) { onDispose { player?.release() } }
     Card(Modifier.animateContentSize(spring(stiffness = Spring.StiffnessMediumLow))) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Your briefing", style = Type.section, color = p.clay); Spacer(Modifier.weight(1f))
+            Text("Daily briefing", style = Type.section, color = p.clay, modifier = Modifier.weight(1f))
             if (model.briefing != null && model.hasAiKey) {
                 Pressable({
-                    player?.let { if (it.isPlaying) { it.pause(); player = null; return@Pressable } }
+                    player?.let { audio ->
+                        if (paused) { audio.start(); paused = false } else { audio.pause(); paused = true }
+                        return@Pressable
+                    }
                     scope.launch {
                         loadingVoice = true
                         try {
                             val file = Core.run("speak", json("text" to Format.plain(model.briefing!!))) as String
-                            player = MediaPlayer().apply { setDataSource(file); prepare(); start(); setOnCompletionListener { player = null } }
-                        } catch (e: Exception) { model.toast(e.message ?: "The voice didn't load.") } finally { loadingVoice = false }
+                            val audio = MediaPlayer()
+                            player = audio
+                            audio.setOnPreparedListener { loadingVoice = false; paused = false; it.start() }
+                            audio.setOnCompletionListener { it.release(); player = null; paused = false }
+                            audio.setOnErrorListener { mp, _, _ ->
+                                mp.release(); player = null; paused = false; loadingVoice = false
+                                model.toast("The voice didn't load."); true
+                            }
+                            audio.setDataSource(file)
+                            audio.prepareAsync()
+                        } catch (e: Core.Failure) {
+                            player?.release(); player = null; loadingVoice = false
+                            model.toast(e.message ?: "The voice didn't load.")
+                        } catch (e: java.io.IOException) {
+                            player?.release(); player = null; loadingVoice = false
+                            model.toast("The voice didn't load.")
+                        }
                     }
-                }) {
+                }, enabled = !loadingVoice) {
                     Row(Modifier.background(p.claySoft, CircleShape).padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                         if (loadingVoice) CircularProgressIndicator(Modifier.size(14.dp), color = p.clay, strokeWidth = 2.dp)
-                        else Icon(Icons.Filled.PlayArrow, null, tint = p.clay, modifier = Modifier.size(16.dp))
-                        Text(if (player != null) "Pause" else "Listen", color = p.clay, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 4.dp))
+                        else if (player == null || paused) Icon(Icons.Filled.PlayArrow, null, tint = p.clay, modifier = Modifier.size(16.dp))
+                        Text(if (loadingVoice) "Preparing…" else if (player == null) "Listen" else if (paused) "Resume" else "Pause", color = p.clay, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 4.dp))
                     }
+                }
+                if (player != null) IconButton({ player?.release(); player = null; paused = false; loadingVoice = false }) {
+                    Text("Stop", color = p.clay, fontSize = 13.sp)
                 }
             }
         }
@@ -115,10 +137,10 @@ fun BriefingCard(model: AppModel) {
         val text = model.briefing
         when {
             model.writing -> WritingShimmer()
-            text == null && !model.hasAiKey -> Text("Add a Gemini key in Settings and everyday. will write you a short briefing each morning from your mail, calendar and the news.", style = Type.body, color = p.text2)
+            text == null && !model.hasAiKey -> Text("Add an AI provider key in Settings and your briefing will appear here each morning.", style = Type.body, color = p.text2)
             text == null -> {
-                Text("A few sentences on what needs you today, written from your mail, calendar and the news.", style = Type.body, color = p.text2)
-                Spacer(Modifier.height(14.dp)); PrimaryButton("Write my briefing", { model.writeBriefing() })
+                Text("No briefing yet. It writes itself each morning, or press Write briefing.", style = Type.body, color = p.text2)
+                Spacer(Modifier.height(14.dp)); PrimaryButton("Write briefing", { model.writeBriefing() })
             }
             else -> {
                 Format.sections(text).forEachIndexed { i, s ->
@@ -126,7 +148,7 @@ fun BriefingCard(model: AppModel) {
                     Text(Format.skim(s.body, p), style = Type.reading, color = p.text)
                 }
                 Spacer(Modifier.height(12.dp))
-                Text("Write it again", color = p.text3, fontSize = 13.5.sp, modifier = Modifier.padding(vertical = 4.dp).clickableNoRipple { model.writeBriefing() })
+                Text("Rewrite", color = p.text3, fontSize = 13.5.sp, modifier = Modifier.padding(vertical = 4.dp).clickableNoRipple { model.writeBriefing() })
             }
         }
     }

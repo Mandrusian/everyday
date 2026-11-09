@@ -11,6 +11,7 @@ export struct Turn { mine: bool, text: string, sources: string }
 export struct EventRow { title: string, when: string }
 export struct Topic { id: string, name: string, on: bool, index: int }
 export struct TopicRow { items: [Topic] }
+export struct BriefingOption { id: string, title: string, detail: string, on: bool }
 export struct SyncDevice { name: string, when: string }
 export struct ReplyChip { label: string, handled: bool, index: int }
 
@@ -484,16 +485,26 @@ component NewsPage inherits VerticalLayout {
     in property <[Story]> stories;
     in property <[Story]> deck;
     in-out property <int> mode;
+    in property <[string]> followed-topics;
+    in property <string> topic;
+    callback select-topic(string);
     callback open-url(string); callback react(int); callback refresh;
     padding: 40px; padding-top: 34px; spacing: 14px;
     HorizontalLayout {
         PageTitle { title: "News"; horizontal-stretch: 1; }
         HorizontalLayout { spacing: 8px; alignment: end; Chip { text: "Top stories"; on: root.mode == 0; clicked => { root.mode = 0; } } Chip { text: "Teach me"; on: root.mode == 1; clicked => { root.mode = 1; } } }
     }
+    if root.mode == 0 && root.followed-topics.length > 0: ScrollView {
+        height: 42px;
+        HorizontalLayout { spacing: 8px; alignment: start;
+            Chip { text: "All stories"; on: root.topic == ""; clicked => { root.select-topic(""); } }
+            for t in root.followed-topics: Chip { text: t; on: root.topic == t; clicked => { root.select-topic(t); } }
+        }
+    }
     if root.mode == 0: ScrollView {
         VerticalLayout {
             alignment: start; spacing: 0;
-            if root.stories.length == 0: Empty { title: "No stories yet"; body: "They arrive with the next refresh."; }
+            if root.stories.length == 0: Empty { title: root.topic == "" ? "No stories yet" : "No stories about “" + root.topic + "” yet"; body: "They arrive with the next refresh."; }
             for s[i] in root.stories: Appear { delay: min(i, 10) * 35ms; Rectangle {
                 height: sl.preferred-height;
                 background: st.has-hover ? Ink.raised.with-alpha(0.6) : transparent; border-radius: 10px;
@@ -688,6 +699,11 @@ component SettingsPage inherits HorizontalLayout {
     in-out property <bool> sync-include-setup: true; in-out property <string> sync-entered;
     callback sync-show-code; callback sync-hide-code; callback sync-join; callback sync-now; callback sync-leave;
     callback save-name; callback save-ics; callback save-morning; callback connect; callback disconnect; callback save-key; callback save-instructions;
+    in property <[BriefingOption]> briefing-options;
+    in-out property <int> news-count: 3;
+    in property <[string]> followed-topics; in property <[string]> muted-topics;
+    in-out property <string> follow-input; in-out property <string> mute-input;
+    callback toggle-briefing(string); callback save-news-count; callback topic-action(string, bool, bool);
     callback toggle-topic(int); callback train; callback reset-interests;
     Rectangle {
         width: 200px;
@@ -728,15 +744,51 @@ component SettingsPage inherits HorizontalLayout {
             } }
             if root.tab == 3: Appear { VerticalLayout {
                 spacing: 12px;
-                Label { text: "Standing instructions"; }
-                Para { text: "Added to every briefing. For example: “Keep it under 80 words”, “Always mention the weather first”."; color: Ink.text2; font-size: 13.5px; }
-                HorizontalLayout { Field { multi: true; placeholder: "Write how you like your briefing"; text <=> root.instructions; edited => { root.save-instructions(); } max-width: 560px; } }
+                Para { text: "Tell everyday. what you want to see each morning. Changes apply the next time a briefing is written."; color: Ink.text2; font-size: 16px; }
+                Label { text: "Include"; }
+                for option in root.briefing-options: HorizontalLayout {
+                    spacing: 12px;
+                    VerticalLayout { horizontal-stretch: 1; spacing: 4px;
+                        Text { text: option.title; color: Ink.text; font-size: 15px; }
+                        Text { text: option.detail; color: Ink.text3; font-size: 13px; }
+                    }
+                    Switch { checked: option.on; toggled => { root.toggle-briefing(option.id); } }
+                }
+                Label { text: "Stories to mention"; }
+                Para { text: "How many news stories the briefing may cover. Zero leaves news out."; color: Ink.text3; font-size: 13px; }
+                HorizontalLayout { alignment: start; spacing: 6px; for n in [0, 1, 2, 3, 4, 5, 6, 7, 8]: Chip { text: n; on: root.news-count == n; clicked => { root.news-count = n; root.save-news-count(); } } }
+                Rectangle { height: 6px; }
+                Label { text: "In your own words"; }
+                Para { text: "Standing instructions the AI follows every time. For example: “Skip anything about Hong Kong and chip makers. I care about AI policy, aviation and Australian politics. Keep it under 100 words.”"; color: Ink.text3; font-size: 14px; }
+                Field { multi: true; placeholder: "Write how you like your briefing"; text <=> root.instructions; edited => { root.save-instructions(); } }
+                Rectangle { height: 6px; }
+                Label { text: "Hide these topics everywhere"; }
+                Para { text: "Stories mentioning any of these words disappear from the briefing, Top news and the reader's list."; color: Ink.text3; font-size: 14px; }
+                HorizontalLayout { spacing: 8px;
+                    Field { placeholder: "Add a word or phrase, then press Return"; text <=> root.mute-input; horizontal-stretch: 1; accepted => { root.topic-action(root.mute-input, false, true); } }
+                    Button { text: "Add"; enabled: root.mute-input != ""; clicked => { root.topic-action(root.mute-input, false, true); } }
+                }
+                for topic in root.muted-topics: HorizontalLayout { spacing: 10px;
+                    Text { text: topic; color: Ink.text; font-size: 14px; horizontal-stretch: 1; overflow: elide; }
+                    Button { text: "Remove"; clicked => { root.topic-action(topic, false, false); } }
+                }
             } }
             if root.tab == 4: Appear { VerticalLayout {
                 spacing: 12px;
                 Label { text: "Topics you follow"; }
                 Para { text: "Tap to add or remove. Top stories lean towards these."; color: Ink.text2; font-size: 13.5px; }
                 TopicPicker { topics: root.topics; toggle(i) => { root.toggle-topic(i); } }
+                Rectangle { height: 10px; }
+                Label { text: "Your own topics"; }
+                Para { text: "Follow anything by name, like “Formula 1”, “Cairns” or “Rust”. Stories that mention it rise to the top, and it gets its own tab in News."; color: Ink.text3; font-size: 14px; }
+                HorizontalLayout { spacing: 8px;
+                    Field { placeholder: "Add a topic, then press Return"; text <=> root.follow-input; horizontal-stretch: 1; accepted => { root.topic-action(root.follow-input, true, true); } }
+                    Button { text: "Follow"; enabled: root.follow-input != ""; clicked => { root.topic-action(root.follow-input, true, true); } }
+                }
+                for topic in root.followed-topics: HorizontalLayout { spacing: 10px;
+                    Text { text: topic; color: Ink.text; font-size: 14px; horizontal-stretch: 1; overflow: elide; }
+                    Button { text: "Remove"; clicked => { root.topic-action(topic, true, false); } }
+                }
                 Rectangle { height: 10px; }
                 Label { text: "What it has learned"; }
                 Para { text: root.top-interests != "" ? root.top-interests : "Nothing yet. Swipe a few stories to teach it."; color: Ink.text; font-size: 14.5px; }
@@ -843,7 +895,7 @@ export component AppWindow inherits Window {
     in property <string> subject; in property <string> summary; in property <bool> security; in property <[Msg]> messages; in property <int> countdown;
     in-out property <string> draft;
     // News, tasks, ask
-    in property <[Story]> stories; in property <[Story]> deck; in-out property <int> news-mode;
+    in property <[Story]> stories; in property <[Story]> news-stories; in property <[Story]> deck; in-out property <int> news-mode; in property <string> news-topic; callback select-news-topic(string);
     in property <[TaskItem]> tasks; in-out property <string> task-input;
     in property <[Turn]> turns; in property <bool> thinking; in-out property <string> ask-input;
     // Settings
@@ -856,6 +908,11 @@ export component AppWindow inherits Window {
     in property <string> sync-error; in property <bool> sync-busy; in property <string> sync-code; in property <image> sync-qr;
     in-out property <bool> sync-include-setup: true; in-out property <string> sync-entered;
     callback sync-show-code; callback sync-hide-code; callback sync-join; callback sync-now; callback sync-leave;
+    in property <[BriefingOption]> briefing-options;
+    in-out property <int> news-count: 3;
+    in property <[string]> followed-topics; in property <[string]> muted-topics;
+    in-out property <string> follow-input; in-out property <string> mute-input;
+    callback toggle-briefing(string); callback save-news-count; callback topic-action(string, bool, bool);
     callback toggle-topic(int); callback save-topics; callback train; callback reset-interests; callback save-instructions;
     callback refresh; callback write-briefing; callback listen; callback reply(int);
     callback open-thread(string); callback archive; callback trash; callback snooze(int); callback handled; callback send; callback undo;
@@ -932,13 +989,16 @@ export component AppWindow inherits Window {
                 open-thread(t) => { root.open-thread(t); } refresh => { root.refresh(); } archive => { root.archive(); } trash => { root.trash(); } snooze(h) => { root.snooze(h); }
                 handled => { root.handled(); } send => { root.send(); } undo => { root.undo(); }
             } }
-            if root.page == 2: PageIn { NewsPage { stories: root.stories; deck: root.deck; mode <=> root.news-mode; open-url(u) => { root.open-url(u); } react(r) => { root.react(r); } refresh => { root.refresh(); } } }
+            if root.page == 2: PageIn { NewsPage { followed-topics: root.followed-topics; topic: root.news-topic; select-topic(t) => { root.select-news-topic(t); } stories: root.news-stories; deck: root.deck; mode <=> root.news-mode; open-url(u) => { root.open-url(u); } react(r) => { root.react(r); } refresh => { root.refresh(); } } }
             if root.page == 3: PageIn { TasksPage { tasks: root.tasks; input <=> root.task-input; add => { root.add-task(); } toggle(t) => { root.toggle-task(t); } delete(t) => { root.delete-task(t); } } }
             if root.page == 4: PageIn { AskPage { turns: root.turns; thinking: root.thinking; has-key: root.has-key; input <=> root.ask-input; ask(q) => { root.ask(q); } } }
             if root.page == 5: PageIn { SettingsPage {
                 sync-paired: root.sync-paired; sync-nearby: root.sync-nearby; sync-devices: root.sync-devices; sync-error: root.sync-error; sync-busy: root.sync-busy;
                 sync-code: root.sync-code; sync-qr: root.sync-qr; sync-include-setup <=> root.sync-include-setup; sync-entered <=> root.sync-entered;
                 sync-show-code => { root.sync-show-code(); } sync-hide-code => { root.sync-hide-code(); } sync-join => { root.sync-join(); } sync-now => { root.sync-now(); } sync-leave => { root.sync-leave(); }
+                briefing-options: root.briefing-options; news-count <=> root.news-count; followed-topics: root.followed-topics; muted-topics: root.muted-topics;
+                follow-input <=> root.follow-input; mute-input <=> root.mute-input;
+                toggle-briefing(id) => { root.toggle-briefing(id); } save-news-count => { root.save-news-count(); } topic-action(t, f, a) => { root.topic-action(t, f, a); }
                 tab <=> root.settings-tab; name <=> root.name; email: root.email; has-key: root.has-key; key-input <=> root.key-input; ics <=> root.ics; morning <=> root.morning; hour <=> root.hour;
                 instructions <=> root.instructions; topics: root.topics; top-interests: root.top-interests;
                 provider <=> root.provider; mail-email <=> root.mail-email; mail-password <=> root.mail-password; busy: root.busy; error: root.error; key-note: root.key-note;

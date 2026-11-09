@@ -39,6 +39,10 @@ class AppModel(private val scope: CoroutineScope) {
 
     var topics by mutableStateOf(setOf<String>())
     var learned by mutableStateOf(listOf<String>())
+    var followedTopics by mutableStateOf(listOf<String>())
+    var newsTopic by mutableStateOf<String?>(null)
+
+    fun selectNewsTopic(topic: String?) = scope.launch { newsTopic = topic; loadLocal() }
 
     fun toggleTopic(id: String) = scope.launch {
         val adding = id !in topics
@@ -65,7 +69,10 @@ class AppModel(private val scope: CoroutineScope) {
 
     suspend fun loadLocal() {
         rows = Core.list("inbox").map { Row(it.getString("threadId"), it.optString("from"), it.optString("fromAddress"), it.optString("subject"), it.optString("snippet"), it.optString("summary"), it.optBoolean("attention"), it.optString("category"), it.optInt("count", 1), it.optLong("date"), it.optBoolean("security")) }
-        stories = Core.list("stories").map(::story)
+        val rawTopics = Core.run("getPref", json("key" to "followedTopics")) as String
+        followedTopics = runCatching { val a = org.json.JSONArray(rawTopics); (0 until a.length()).map { a.getString(it) } }.getOrElse { rawTopics.split(',').map(String::trim).filter(String::isNotBlank) }
+        if (newsTopic !in followedTopics) newsTopic = null
+        stories = Core.list("stories", json("topic" to newsTopic)).map(::story)
         deck = Core.list("swipeDeck").map(::story)
         learned = (Core.run("topInterests") as? org.json.JSONArray)?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: emptyList()
         tasks = Core.list("tasks").map { TaskItem(it.getString("id"), it.getString("title"), if (it.isNull("due")) null else it.optLong("due")) }

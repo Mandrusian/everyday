@@ -5,23 +5,41 @@ use crate::skim;
 
 pub struct Inputs<'a> { pub rows: &'a [Row], pub local: &'a Local, pub tasks: &'a [String], pub weather: Option<String>, pub calendar: Option<String>, pub news: &'a [String], pub standing_instructions: &'a str }
 
+pub const ALL_SECTIONS: &[&str] = &["mail", "calendar", "weather", "news", "tasks"];
+
+/// Missing settings include everything; an explicit empty list includes nothing.
+#[derive(Debug, Clone)]
+pub struct Settings { pub sections: Vec<String>, pub news_count: usize }
+impl Default for Settings {
+    fn default() -> Self { Self { sections: ALL_SECTIONS.iter().map(|s| s.to_string()).collect(), news_count: 3 } }
+}
+impl Settings {
+    pub fn from_prefs(sections: &str, news_count: &str) -> Self {
+        let sections = if sections.trim().is_empty() { Self::default().sections } else { crate::news::topic_list(sections).into_iter().filter(|s| ALL_SECTIONS.contains(&s.as_str())).collect() };
+        let news_count = news_count.parse::<usize>().unwrap_or(3).min(8);
+        Self { sections, news_count }
+    }
+    pub fn includes(&self, section: &str) -> bool { self.sections.iter().any(|s| s == section) }
+}
+
 /// The data block sent to the model. Handled mail is listed separately so the model is told not to mention it.
-pub fn context(i: &Inputs) -> String {
+pub fn context(i: &Inputs) -> String { context_with_settings(i, &Settings::default()) }
+pub fn context_with_settings(i: &Inputs, settings: &Settings) -> String {
     let mut out: Vec<String> = vec![];
-    let attention: Vec<&Row> = i.rows.iter().filter(|r| r.triage.as_ref().map_or(false, |t| !matches!(t.category, crate::bundler::Category::Newsletter | crate::bundler::Category::Promo | crate::bundler::Category::SpamSuspect) && t.priority >= 40)).take(12).collect();
+    let attention: Vec<&Row> = i.rows.iter().filter(|_| settings.includes("mail")).filter(|r| r.triage.as_ref().map_or(false, |t| !matches!(t.category, crate::bundler::Category::Newsletter | crate::bundler::Category::Promo | crate::bundler::Category::SpamSuspect) && t.priority >= 40)).take(12).collect();
     if !attention.is_empty() {
         out.push("EMAIL NEEDING ATTENTION (priority-ordered):".into());
         for r in attention { let t = r.triage.as_ref().unwrap(); out.push(format!("- [priority {}] {}: {} — {}{}", t.priority, r.message.from_name, r.message.subject, t.summary, if t.needs_reply { " (reply owed)" } else { "" })); }
     }
-    let banned = mailrules::banned_names(i.rows, i.local);
+    let banned = if settings.includes("mail") { mailrules::banned_names(i.rows, i.local) } else { vec![] };
     if !banned.is_empty() {
         out.push("\nALREADY HANDLED BY THE READER (they said these were them or do not matter; never mention these senders or anything like them):".into());
         for b in &banned { out.push(format!("- {b}")); }
     }
-    if !i.tasks.is_empty() { out.push("\nOPEN TASKS:".into()); out.extend(i.tasks.iter().take(12).map(|t| format!("- {t}"))); }
-    if let Some(c) = i.calendar.as_ref().filter(|c| !c.is_empty()) { out.push(format!("\nCALENDAR TODAY: {c}")); }
-    if let Some(w) = &i.weather { out.push(format!("\nWEATHER: {w}")); }
-    if !i.news.is_empty() { out.push("\nTOP NEWS:".into()); out.extend(i.news.iter().map(|n| format!("- {n}"))); }
+    if settings.includes("tasks") && !i.tasks.is_empty() { out.push("\nOPEN TASKS:".into()); out.extend(i.tasks.iter().take(12).map(|t| format!("- {t}"))); }
+    if let Some(c) = i.calendar.as_ref().filter(|c| settings.includes("calendar") && !c.is_empty()) { out.push(format!("\nCALENDAR TODAY: {c}")); }
+    if let Some(w) = i.weather.as_ref().filter(|_| settings.includes("weather")) { out.push(format!("\nWEATHER: {w}")); }
+    if settings.includes("news") && settings.news_count > 0 && !i.news.is_empty() { out.push("\nTOP NEWS:".into()); out.extend(i.news.iter().take(settings.news_count).map(|n| format!("- {n}"))); }
     out.join("\n")
 }
 
@@ -33,9 +51,12 @@ pub fn system(name: &str, today: &str, standing: &str) -> String {
 
 /// Writes the briefing. If the draft still names a handled sender it is rewritten once, and any sentence that still does is removed.
 pub fn generate(call: &dyn Fn(&ai::Request) -> Result<String, AiError>, i: &Inputs, name: &str, today: &str) -> Result<String, AiError> {
-    let data = context(i);
+    generate_with_settings(call, i, name, today, &Settings::default())
+}
+pub fn generate_with_settings(call: &dyn Fn(&ai::Request) -> Result<String, AiError>, i: &Inputs, name: &str, today: &str, settings: &Settings) -> Result<String, AiError> {
+    let data = context_with_settings(i, settings);
     if data.trim().is_empty() { return Err(AiError::BadResponse("There is nothing to brief yet. Connect mail or refresh the news first.".into())); }
-    let banned = mailrules::banned_names(i.rows, i.local);
+    let banned = if settings.includes("mail") { mailrules::banned_names(i.rows, i.local) } else { vec![] };
     let mut text = String::new();
     for attempt in 0..2 {
         let hint = if attempt == 0 { String::new() } else { format!("\n\nYour previous draft mentioned {}, which the reader has already handled. Write it again without any mention of them.", banned.join(", ")) };
@@ -61,6 +82,19 @@ mod tests {
         let tri: HashMap<String, Triage> = [("g1", Category::Important, 90u8, false), ("d1", Category::NeedsReply, 90, true)].iter().map(|(i, c, p, n)| (i.to_string(), Triage { message_id: i.to_string(), category: *c, priority: *p, summary: "s".into(), deadline: None, needs_reply: *n })).collect();
         let mut local = Local::default(); local.handled.insert("gt1".into());
         (crate::mailrules::rows(&emails, &tri, &local, 0), local)
+    }
+    #[test] fn chosen_sections_exclude_data_and_zero_stories_leaves_news_out() {
+        let (rows, local) = rows_and_local();
+        let news = vec!["First story".into(), "Second story".into()];
+        let inputs = Inputs { rows: &rows, local: &local, tasks: &["Pay rent".into()], weather: Some("Sunny".into()), calendar: Some("Lunch".into()), news: &news, standing_instructions: "" };
+        let settings = Settings::from_prefs(r#"["tasks", "news"]"#, "1");
+        let text = context_with_settings(&inputs, &settings);
+        assert!(text.contains("Pay rent") && text.contains("First story"));
+        assert!(!text.contains("Oscar") && !text.contains("Google") && !text.contains("Sunny") && !text.contains("Lunch") && !text.contains("Second story"));
+        assert!(!context_with_settings(&inputs, &Settings::from_prefs(r#"["news"]"#, "0")).contains("TOP NEWS"));
+        assert!(context_with_settings(&inputs, &Settings::from_prefs("[]", "8")).is_empty());
+        assert_eq!(Settings::from_prefs("", "99").news_count, 8);
+        assert!(Settings::from_prefs("", "").includes("mail"));
     }
     #[test] fn context_lists_oscar_as_attention_and_google_as_handled() {
         let (rows, local) = rows_and_local();
