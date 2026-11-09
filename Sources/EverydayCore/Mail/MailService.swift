@@ -357,7 +357,13 @@ public final class MailService: @unchecked Sendable {
         }.prefix(6).map { m in
             TaskSuggestion(id: "local." + m.id, title: "Check: \(m.subject)", due: nil, priority: .medium, sourceDescription: "\(m.fromName): \(m.subject)", threadId: m.threadId, dismissed: false)
         }
-        return ai + local
+        // The same task often comes from several emails (CI runs, reminders): show it once.
+        var seen = Set<String>()
+        return (ai + local).filter { seen.insert(Self.suggestionKey($0.title)).inserted }
+    }
+
+    static func suggestionKey(_ title: String) -> String {
+        title.lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }.joined(separator: " ")
     }
 
     static let actionable = try! NSRegularExpression(pattern: #"(\bdue\b|deadline|expires?|expiring|overdue|action required|please (reply|confirm|sign|respond|review)|\bby (mon|tue|wed|thu|fri|sat|sun)|invoice|renewal|payment (failed|due)|final (notice|reminder))"#, options: .caseInsensitive)
@@ -365,7 +371,14 @@ public final class MailService: @unchecked Sendable {
         let text = m.subject + " " + m.snippet
         return actionable.firstMatch(in: text, range: NSRange(location: 0, length: (text as NSString).length)) != nil
     }
-    public func dismiss(_ s: TaskSuggestion) { var x = s; x.dismissed = true; try? db.put("taskSuggestion", id: s.id, sort: 0, x) }
+    /// Dismisses the suggestion and any stored copies with the same title, so a duplicate doesn't take its place.
+    public func dismiss(_ s: TaskSuggestion) {
+        let key = Self.suggestionKey(s.title)
+        let stored: [TaskSuggestion] = (try? db.all("taskSuggestion", limit: 300, as: TaskSuggestion.self)) ?? []
+        for var x in stored.filter({ $0.id == s.id || Self.suggestionKey($0.title) == key }) + (stored.contains { $0.id == s.id } ? [] : [s]) {
+            x.dismissed = true; try? db.put("taskSuggestion", id: x.id, sort: 0, x)
+        }
+    }
 
     /// One summary for a whole bundle, cached until its set of conversations changes.
     public func bundleSummary(_ b: MailBundle, regenerate: Bool = false) async throws -> String {

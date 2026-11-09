@@ -560,6 +560,7 @@ final class AppModel {
 
     func accept(_ s: TaskSuggestion) {
         var t = tasks.accept(s)
+        mail.dismiss(s)  // also hides suggestions with the same title from other emails
         if prefs.bool(Prefs.Key.remindersSync), calendar.reminderAccess == .granted, let id = calendar.addReminder(for: t) { t.reminderIdentifier = id; tasks.save(t) }
         reloadTasks(); scheduleTaskNotifications()
         say("Added “\(s.title)”.")

@@ -8,7 +8,7 @@ public enum SkimMarkup {
     public struct Segment: Sendable, Hashable { public var text: String; public var kind: Kind? }
 
     /// Prompt text that teaches a model the tags.
-    public static let promptRule = "For skim reading, wrap the phrases a reader must not miss in these tags, never nested, each under six words, at most ten in total: <<u|…>> for anything urgent or a deadline, <<a|…>> for something the reader needs to do (a short verb phrase such as “reply to Oscar” or “sign the lease”), <<d|…>> for dates and times, <<p|…>> for people and organisations, <<m|…>> for money, <<n|…>> for other numbers and measurements such as temperatures, percentages or versions, <<l|…>> for places. Everything else stays plain. Do not use markdown or any other markup."
+    public static let promptRule = "For skim reading, wrap the phrases a reader must not miss in these tags, never nested, each under six words, at most ten in total: <<u|…>> for anything urgent or a deadline, <<a|…>> for something the reader needs to do (a short verb phrase such as “reply to Oscar” or “sign the lease”), <<d|…>> for dates and times, <<p|…>> for people and organisations, <<m|…>> for money, <<n|…>> for other numbers and measurements such as temperatures, percentages or versions, <<l|…>> for places. Everything else stays plain apart from light markdown: **bold**, *italics*, lists starting with \"- \" or \"1. \", and [links](https://…). Never put a skim tag inside bold or a link."
 
     static let regex = try! NSRegularExpression(pattern: #"<<([uadpmnl])\|(.*?)>>"#, options: [.dotMatchesLineSeparators])
 

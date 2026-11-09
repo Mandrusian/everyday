@@ -199,14 +199,15 @@ extension Briefing {
         return result.joined(separator: "\n").replacingOccurrences(of: #"\n{3,}"#, with: "\n\n", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    static func isHeading(_ line: String) -> Bool { line.trimmingCharacters(in: .whitespaces).hasPrefix("## ") }
+    /// Markdown headings of any level ("# ", "## ", "### "…).
+    static func isHeading(_ line: String) -> Bool { line.trimmingCharacters(in: .whitespaces).range(of: #"^#{1,6} "#, options: .regularExpression) != nil }
 
     /// The briefing split into sections: an optional short heading and its text.
     public static func sections(_ text: String) -> [(heading: String?, body: String)] {
         var out: [(String?, String)] = [], heading: String? = nil, body: [String] = []
         func flush() { let b = body.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines); if heading != nil || !b.isEmpty { out.append((heading, b)) }; body = [] }
         for line in text.components(separatedBy: "\n") {
-            if isHeading(line) { flush(); heading = String(line.trimmingCharacters(in: .whitespaces).dropFirst(3)).trimmingCharacters(in: CharacterSet(charactersIn: " #:")) }
+            if isHeading(line) { flush(); heading = Markdown.plain(SkimMarkup.strip(line)).trimmingCharacters(in: CharacterSet(charactersIn: " #:")) }
             else { body.append(line) }
         }
         flush()
@@ -215,7 +216,7 @@ extension Briefing {
 
     /// Plain prose for speech and notifications: no highlight tags and no headings.
     public static func plain(_ text: String) -> String {
-        sections(text).map { SkimMarkup.strip($0.body) }.joined(separator: "\n\n")
+        sections(text).map { Markdown.plainText(SkimMarkup.strip($0.body)) }.joined(separator: "\n\n")
     }
 }
 

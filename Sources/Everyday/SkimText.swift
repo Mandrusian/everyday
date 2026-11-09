@@ -45,7 +45,7 @@ struct SkimBody: View {
                 VStack(alignment: .leading, spacing: 14) {
                     ForEach(Array(parts.enumerated()), id: \.offset) { _, p in
                         VStack(alignment: .leading, spacing: 4) {
-                            if let h = p.heading { Text(h).font(.ui(12.5, .semibold)).tracking(0.4).foregroundStyle(Palette.accentText) }
+                            if let h = p.heading { Text(Markdown.plain(SkimMarkup.strip(h))).font(.ui(12.5, .semibold)).tracking(0.4).foregroundStyle(Palette.accentText) }
                             paragraph(p.body)
                         }
                     }
@@ -76,20 +76,45 @@ struct SkimBody: View {
     @Local private var latestBox = ""
     private var latest: String { get { latestBox } nonmutating set { latestBox = newValue } }
 
+    /// Paragraphs and lists from light markdown; bullets hang so wrapped lines line up with the text.
     @ViewBuilder private func paragraph(_ t: String) -> some View {
-        if model.skim { Text(attributed(t)) } else { Text(SkimMarkup.strip(t)) }
+        let blocks = Markdown.blocks(t)
+        if blocks.count <= 1, case .paragraph(let p)? = blocks.first { line(p) }
+        else {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(Array(blocks.enumerated()), id: \.offset) { _, b in
+                    switch b {
+                    case .paragraph(let p): line(p)
+                    case .bullet(let p): HStack(alignment: .firstTextBaseline, spacing: 8) { Text("•").foregroundStyle(Palette.accentText); line(p) }
+                    case .numbered(let n, let p): HStack(alignment: .firstTextBaseline, spacing: 8) { Text(n).foregroundStyle(Palette.text3).monospacedDigit(); line(p) }
+                    }
+                }
+            }
+        }
     }
 
+    private func line(_ t: String) -> some View { Text(attributed(t)).fixedSize(horizontal: false, vertical: true) }
+
+    /// Skim tags become coloured phrases (when highlights are on); **bold**, *italics*, `code` and [links](url) are rendered.
+    /// Bold may span tags, so it is tracked across segments rather than parsed per segment.
     private func attributed(_ t: String) -> AttributedString {
         var out = AttributedString()
+        var bold = false
         for seg in SkimMarkup.segments(t) {
-            var a = AttributedString(seg.text)
-            if let k = seg.kind {
-                a.foregroundColor = k.color
-                a.backgroundColor = k.color.opacity(0.16)
-                a.inlinePresentationIntent = .stronglyEmphasized
+            let pieces = seg.text.components(separatedBy: "**")
+            for (i, piece) in pieces.enumerated() {
+                if i > 0 { bold.toggle() }
+                guard !piece.isEmpty else { continue }
+                var a = (try? AttributedString(markdown: piece, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(piece)
+                if bold { a.inlinePresentationIntent = (a.inlinePresentationIntent ?? []).union(.stronglyEmphasized) }
+                for run in a.runs where run.link != nil { a[run.range].foregroundColor = Palette.accentText; a[run.range].underlineStyle = .single }
+                if model.skim, let k = seg.kind {
+                    a.foregroundColor = k.color
+                    a.backgroundColor = k.color.opacity(0.16)
+                    a.inlinePresentationIntent = (a.inlinePresentationIntent ?? []).union(.stronglyEmphasized)
+                }
+                out += a
             }
-            out += a
         }
         return out
     }

@@ -83,6 +83,10 @@ check("skim: strip removes tags", SkimMarkup.strip(sk) == "Pay the invoice by Fr
 check("skim: unclosed tag does not leak", !SkimMarkup.strip("Meeting <<d|Friday at noon").contains("<<"), SkimMarkup.strip("Meeting <<d|Friday at noon"))
 check("skim: limit keeps first N highlights", SkimMarkup.segments(SkimMarkup.limit("<<u|a>> <<d|b>> <<p|c>>", max: 2)).filter { $0.kind != nil }.count == 2 && SkimMarkup.strip(SkimMarkup.limit("<<u|a>> <<d|b>> <<p|c>>", max: 2)) == "a b c")
 check("skim: plain text unchanged", SkimMarkup.strip("Nothing special.") == "Nothing special." && !SkimMarkup.hasTags("Nothing special."))
+check("markdown: lists and paragraphs", Markdown.blocks("Intro line\n- **One** item\n2. Two") == [.paragraph("Intro line"), .bullet("**One** item"), .numbered("2.", "Two")])
+check("markdown: plain strips inline marks", Markdown.plain("**Bold** and *it* with [link](https://x.y) `c`") == "Bold and it with link c", Markdown.plain("**Bold** and *it* with [link](https://x.y) `c`"))
+check("briefing: tagged heading is clean", Briefing.sections("## <<d|Today>>\nHello").first?.heading == "Today")
+check("briefing: plain has no markdown", !Briefing.plain("## News\n- **A** (B)").contains("*"))
 
 
 // Local highlight fallback
