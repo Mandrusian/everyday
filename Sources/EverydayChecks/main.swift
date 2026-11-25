@@ -381,7 +381,7 @@ do {
     let backend = ImapBackend(prefs: ip, testing: ("127.0.0.1", srv.port, false))
     try backend.save(account: ImapAccount(email: "me@example.com", username: "me@example.com", presetID: "custom", imapHost: "127.0.0.1", imapPort: Int(srv.port), smtpHost: "127.0.0.1", smtpPort: 25, smtpSecurity: .ssl), password: "app pass word")
     check("imap: password stored in keychain with spaces stripped", Keychain.get(ImapBackend.passwordKey("me@example.com")) == "apppassword")
-    var b1 = try await backend.sync(days: 30, known: [], state: nil, progress: nil)
+    let b1 = try await backend.sync(days: 30, known: [], state: nil, progress: nil)
     check("imap: first sync fetches 3 messages", b1.upserts.count == 3 && b1.state == "7:3", "\(b1.upserts.count) state \(b1.state ?? "-")")
     check("imap: threads group by References", Set(b1.upserts.filter { $0.subject.contains("Roadmap") }.map(\.threadId)).count == 1)
     check("imap: unread flag from \\Seen", b1.upserts.first { $0.subject == "Roadmap" }?.isUnread == true && b1.upserts.first { $0.subject == "Re: Roadmap" }?.isUnread == false)

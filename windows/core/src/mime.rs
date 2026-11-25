@@ -27,9 +27,11 @@ fn text_of(h: Option<&HeaderValue>) -> Vec<String> {
 
 pub fn parse(raw: &[u8]) -> ParsedMail {
     let Some(m) = MessageParser::default().parse(raw) else { return ParsedMail::default() };
-    let mut p = ParsedMail::default();
-    p.subject = m.subject().unwrap_or("").to_string();
-    p.date = m.date().filter(|d| d.is_valid()).map(|d| d.to_timestamp());
+    let mut p = ParsedMail {
+        subject: m.subject().unwrap_or("").to_string(),
+        date: m.date().filter(|d| d.is_valid()).map(|d| d.to_timestamp()),
+        ..Default::default()
+    };
     if let Some(a) = m.from().and_then(|f| f.first()) { p.from_name = a.name().unwrap_or("").to_string(); p.from_address = a.address().unwrap_or("").to_string(); }
     p.to = m.to().map(|t| t.iter().filter_map(|a| a.address()).collect::<Vec<_>>().join(", ")).unwrap_or_default();
     p.message_id = m.message_id().unwrap_or("").to_string();
@@ -66,7 +68,7 @@ pub struct UnsubscribeTarget { pub web: Option<Url>, pub mailto: Option<String> 
 impl UnsubscribeTarget {
     pub fn host(&self) -> String {
         self.web.as_ref().and_then(|u| u.host_str().map(String::from))
-            .or_else(|| self.mailto.as_ref().and_then(|m| m.split('@').last().map(String::from)))
+            .or_else(|| self.mailto.as_ref().and_then(|m| m.split('@').next_back().map(String::from)))
             .unwrap_or_else(|| "the sender".into())
     }
 }

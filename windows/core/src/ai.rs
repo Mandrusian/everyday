@@ -99,7 +99,7 @@ pub fn complete(provider: Provider, model: &str, key: &str, local_endpoint: &str
 pub fn extract_json(text: &str) -> Option<Value> {
     let mut s = text.trim().to_string();
     if s.starts_with("```") { s = s.replace("```json", "").replace("```", "").trim().to_string(); }
-    let start = s.find(|c| c == '{' || c == '[')?;
+    let start = s.find(['{', '['])?;
     let close = if s[start..].starts_with('{') { '}' } else { ']' };
     let end = s.rfind(close)?;
     if end <= start { return None; }

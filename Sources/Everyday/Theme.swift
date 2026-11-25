@@ -53,7 +53,7 @@ struct PaperGrain: View {
             px[i * 4] = 92; px[i * 4 + 1] = 70; px[i * 4 + 2] = 40; px[i * 4 + 3] = a
         }
         let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: n, pixelsHigh: n, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: n * 4, bitsPerPixel: 32)!
-        px.withUnsafeBufferPointer { memcpy(rep.bitmapData!, $0.baseAddress!, px.count) }
+        px.withUnsafeBufferPointer { _ = memcpy(rep.bitmapData!, $0.baseAddress!, px.count) }
         let img = NSImage(size: NSSize(width: n, height: n)); img.addRepresentation(rep); return img
     }()
     var body: some View {

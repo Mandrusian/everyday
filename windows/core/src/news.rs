@@ -47,7 +47,7 @@ pub fn stories(mut arts: Vec<Article>, now: i64, opt: &Options, interest: &dyn F
         arts.retain(|a| format!("{} {}", a.title, a.summary).to_lowercase().contains(&topic));
     }
     if opt.hide_promos { arts.retain(|a| !is_promo(&a.title)); }
-    arts.sort_by(|a, b| b.published.cmp(&a.published));
+    arts.sort_by_key(|a| std::cmp::Reverse(a.published));
 
     struct Cluster { lead: Article, tokens: HashSet<String>, others: Vec<Article> }
     let mut clusters: Vec<Cluster> = vec![];

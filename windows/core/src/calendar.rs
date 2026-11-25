@@ -34,7 +34,8 @@ fn step(d: DateTime<Utc>, r: &Rule) -> Option<DateTime<Utc>> {
 
 /// Events (with repeats expanded) that start within [from, to]. `offset_secs` is the reader's UTC offset for floating times.
 pub fn parse_ics(text: &str, from: DateTime<Utc>, to: DateTime<Utc>, offset_secs: i32) -> Vec<Event> {
-    let mut out = vec![]; let mut cur: Option<(String, Option<(DateTime<Utc>, bool)>, Option<DateTime<Utc>>, String, Option<Rule>)> = None; let mut cancelled = false;
+    type DraftEvent = (String, Option<(DateTime<Utc>, bool)>, Option<DateTime<Utc>>, String, Option<Rule>);
+    let mut out = vec![]; let mut cur: Option<DraftEvent> = None; let mut cancelled = false;
     for line in unfold(text) {
         if line == "BEGIN:VEVENT" { cur = Some((String::new(), None, None, String::new(), None)); cancelled = false; continue; }
         if line == "END:VEVENT" {
@@ -43,8 +44,8 @@ pub fn parse_ics(text: &str, from: DateTime<Utc>, to: DateTime<Utc>, offset_secs
                 let mut s = start; let mut n = 0u32;
                 loop {
                     if s > to { break; }
-                    if let Some(r) = &rule { if r.count.map_or(false, |c| n >= c) || r.until.map_or(false, |u| s > u) { break; } }
-                    if s >= from || dur.map_or(false, |d| s + d >= from) { out.push(Event { title: title.clone(), start: s, end: dur.map(|d| s + d), all_day, location: loc.clone() }); }
+                    if let Some(r) = &rule { if r.count.is_some_and(|c| n >= c) || r.until.is_some_and(|u| s > u) { break; } }
+                    if s >= from || dur.is_some_and(|d| s + d >= from) { out.push(Event { title: title.clone(), start: s, end: dur.map(|d| s + d), all_day, location: loc.clone() }); }
                     n += 1; match &rule { Some(r) => match step(s, r) { Some(x) => s = x, None => break }, None => break }
                     if n > 2000 { break; }
                 }

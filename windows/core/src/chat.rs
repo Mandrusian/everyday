@@ -9,7 +9,7 @@ pub struct Context<'a> { pub rows: &'a [Row], pub local: &'a Local, pub tasks: &
 /// The data block with citation tags: [M1].. for mail, [N1].. for stories. Returns the sources so tags can be resolved afterwards.
 pub fn build_context(c: &Context) -> (String, Vec<Source>) {
     let mut out: Vec<String> = vec![]; let mut sources: Vec<Source> = vec![];
-    let mail: Vec<&Row> = c.rows.iter().filter(|r| r.triage.as_ref().map_or(false, |t| !matches!(t.category, Category::Newsletter | Category::Promo | Category::SpamSuspect) && t.priority >= 40)).take(15).collect();
+    let mail: Vec<&Row> = c.rows.iter().filter(|r| r.triage.as_ref().is_some_and(|t| !matches!(t.category, Category::Newsletter | Category::Promo | Category::SpamSuspect) && t.priority >= 40)).take(15).collect();
     if !mail.is_empty() {
         out.push("EMAIL NEEDING ATTENTION (priority-ordered):".into());
         for (i, r) in mail.iter().enumerate() {

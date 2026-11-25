@@ -92,7 +92,7 @@ mod tests {
     fn fake(auth: bool, good_pw: &'static str) -> (u16, Arc<Mutex<Vec<String>>>) {
         let log = Arc::new(Mutex::new(vec![])); let l2 = log.clone();
         let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap(); let port = l.local_addr().unwrap().port();
-        std::thread::spawn(move || { for c in l.incoming().take(1) { let c = c.unwrap(); let mut w = c.try_clone().unwrap(); let mut r = BufReader::new(c); w.write_all(b"220 fake\r\n").unwrap(); let mut in_data = false;
+        std::thread::spawn(move || { if let Some(c) = l.incoming().next() { let c = c.unwrap(); let mut w = c.try_clone().unwrap(); let mut r = BufReader::new(c); w.write_all(b"220 fake\r\n").unwrap(); let mut in_data = false;
             loop { let mut line = String::new(); if r.read_line(&mut line).unwrap_or(0) == 0 { return; } let line = line.trim_end().to_string(); l2.lock().unwrap().push(line.clone());
                 if in_data { if line == "." { in_data = false; w.write_all(b"250 queued\r\n").unwrap(); } continue; }
                 let up = line.to_uppercase();
