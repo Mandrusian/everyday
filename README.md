@@ -128,7 +128,7 @@ GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... swift run EverydayChecks
 
 **Releasing:** `./Scripts/release.sh 0.2.0` runs the checks, builds the app, makes a `.dmg` with a SHA-256 file and bumps `site/version.json` for the in-app update notice. With `DEVELOPER_ID` set it also signs and notarizes.
 
-**Windows:** a port lives in `windows/` (a Rust core with its own tests and a Tauri app). GitHub Actions builds the installer. It hasn't been tested on a Windows machine yet; see [WINDOWS.md](WINDOWS.md).
+**Windows & Android:** a Windows port lives in `windows/` (a Rust core with its own tests and a native Slint desktop app; GitHub Actions builds the NSIS and MSI installers — see [WINDOWS.md](WINDOWS.md)). An Android Jetpack Compose app lives in `android/` using the shared Rust core; see [ANDROID.md](ANDROID.md).
 
 **Website:** the static site is in `site/`; see [site/README.md](site/README.md).
 
