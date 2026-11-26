@@ -136,7 +136,7 @@ pub mod fake {
             else if up.starts_with("UID FETCH") {
                 let set = rest.split_whitespace().nth(2).unwrap_or(""); let body = up.contains("BODY.PEEK");
                 for m in st.lock().unwrap().msgs.iter() {
-                    let wanted = set == "1:*" || set.split(',').any(|x| x.parse() == Ok(m.uid)) || set.split_once(':').map_or(false, |(a, _)| a.parse::<u32>().map_or(false, |a| m.uid >= a));
+                    let wanted = set == "1:*" || set.split(',').any(|x| x.parse() == Ok(m.uid)) || set.split_once(':').is_some_and(|(a, _)| a.parse::<u32>().is_ok_and(|a| m.uid >= a));
                     if !wanted { continue; }
                     let fl = m.flags.join(" ");
                     if body { write!(w, "* {} FETCH (UID {} FLAGS ({fl}) BODY[] {{{}}}\r\n{})\r\n", m.uid, m.uid, m.raw.len(), m.raw).unwrap(); } else { write!(w, "* {} FETCH (UID {} FLAGS ({fl}))\r\n", m.uid, m.uid).unwrap(); }

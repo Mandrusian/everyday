@@ -26,7 +26,7 @@ impl Settings {
 pub fn context(i: &Inputs) -> String { context_with_settings(i, &Settings::default()) }
 pub fn context_with_settings(i: &Inputs, settings: &Settings) -> String {
     let mut out: Vec<String> = vec![];
-    let attention: Vec<&Row> = i.rows.iter().filter(|_| settings.includes("mail")).filter(|r| r.triage.as_ref().map_or(false, |t| !matches!(t.category, crate::bundler::Category::Newsletter | crate::bundler::Category::Promo | crate::bundler::Category::SpamSuspect) && t.priority >= 40)).take(12).collect();
+    let attention: Vec<&Row> = i.rows.iter().filter(|_| settings.includes("mail")).filter(|r| r.triage.as_ref().is_some_and(|t| !matches!(t.category, crate::bundler::Category::Newsletter | crate::bundler::Category::Promo | crate::bundler::Category::SpamSuspect) && t.priority >= 40)).take(12).collect();
     if !attention.is_empty() {
         out.push("EMAIL NEEDING ATTENTION (priority-ordered):".into());
         for r in attention { let t = r.triage.as_ref().unwrap(); out.push(format!("- [priority {}] {}: {} — {}{}", t.priority, r.message.from_name, r.message.subject, t.summary, if t.needs_reply { " (reply owed)" } else { "" })); }

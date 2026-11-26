@@ -44,11 +44,12 @@ fn pref(st: &Store, k: &str) -> String { st.get::<String>("pref", k).unwrap_or_d
 fn s(v: &Value, k: &str) -> String { v[k].as_str().unwrap_or_default().to_string() }
 
 fn local_rules(st: &Store) -> mailrules::Local {
-    let mut l = mailrules::Local::default();
-    l.handled = st.all::<String>("handledThread", 5000).into_iter().collect();
-    l.snoozed = st.all::<Value>("snooze", 2000).into_iter().filter_map(|v| Some((v["thread"].as_str()?.to_string(), v["until"].as_i64()?))).collect();
-    l.vips = st.all::<String>("vipSender", 500).into_iter().collect();
-    l
+    mailrules::Local {
+        handled: st.all::<String>("handledThread", 5000).into_iter().collect(),
+        snoozed: st.all::<Value>("snooze", 2000).into_iter().filter_map(|v| Some((v["thread"].as_str()?.to_string(), v["until"].as_i64()?))).collect(),
+        vips: st.all::<String>("vipSender", 500).into_iter().collect(),
+        ..Default::default()
+    }
 }
 fn all_rows(st: &Store) -> (Vec<service::StoredEmail>, Vec<mailrules::Row>, mailrules::Local) {
     let stored: Vec<service::StoredEmail> = st.all("email", 5000);
@@ -109,7 +110,7 @@ pub fn run(cmd: &str, args: &Value, secrets: &dyn SecretStore) -> Result<Value, 
             let st = st()?; let (stored, rows, _) = all_rows(&st);
             json!(rows.into_iter().map(|r| {
                 let m = stored.iter().find(|m| m.id == r.message.id);
-                let security = m.map_or(false, |m| bundler::is_automated(&m.from_address, r.triage.as_ref().map(|t| t.category)) && is_security(&m.subject));
+                let security = m.is_some_and(|m| bundler::is_automated(&m.from_address, r.triage.as_ref().map(|t| t.category)) && is_security(&m.subject));
                 json!({ "threadId": r.message.thread_id, "from": r.message.from_name, "fromAddress": r.message.from_address, "subject": r.message.subject,
                         "snippet": m.map(|m| skim::preview(&m.snippet, 140)).unwrap_or_default(), "summary": r.triage.as_ref().map(|t| t.summary.clone()).unwrap_or_default(),
                         "attention": mailrules::is_attention(&r), "priority": r.triage.as_ref().map_or(-1, |t| t.priority as i32),
@@ -154,11 +155,11 @@ pub fn run(cmd: &str, args: &Value, secrets: &dyn SecretStore) -> Result<Value, 
             let st = st()?; let prof = profile(&st);
             let mut options = news_options(&st, 40);
             options.topic = args["topic"].as_str().map(String::from);
-            json!(news::stories(load_articles(&st, 4000), now_ts(), &options, &|x| prof.score(&[], &x.source, &x.title)).into_iter().map(|s| story(s)).collect::<Vec<_>>())
+            json!(news::stories(load_articles(&st, 4000), now_ts(), &options, &|x| prof.score(&[], &x.source, &x.title)).into_iter().map(story).collect::<Vec<_>>())
         }
         "swipeDeck" => {
             let st = st()?; let seen: std::collections::HashSet<String> = st.all::<String>("reacted", 5000).into_iter().collect();
-            json!(news::stories(load_articles(&st, 600), now_ts(), &news_options(&st, 60), &|_| 0.0).into_iter().filter(|s| !seen.contains(&s.lead.url)).take(12).map(|s| story(s)).collect::<Vec<_>>())
+            json!(news::stories(load_articles(&st, 600), now_ts(), &news_options(&st, 60), &|_| 0.0).into_iter().filter(|s| !seen.contains(&s.lead.url)).take(12).map(story).collect::<Vec<_>>())
         }
         // reaction: 2 love, 1 like, -1 not interested.
         "react" => { let st = st()?; let mut p = profile(&st); p.record(&[], &s(args, "source"), &s(args, "title"), args["reaction"].as_f64().unwrap_or(1.0), now_ts()); let _ = st.put("profile", "interest", 0.0, &p); let _ = st.put("reacted", &s(args, "url"), 0.0, &s(args, "url")); json!(null) }
@@ -193,7 +194,7 @@ pub fn run(cmd: &str, args: &Value, secrets: &dyn SecretStore) -> Result<Value, 
         "quickReplies" => {
             let (stored, attention, valid, automated, list) = {
                 let st = st()?; let (stored, rows, _) = all_rows(&st);
-                let att: Vec<mailrules::Row> = rows.into_iter().filter(|r| mailrules::is_attention(r)).take(8).collect();
+                let att: Vec<mailrules::Row> = rows.into_iter().filter(mailrules::is_attention).take(8).collect();
                 let automated: Vec<String> = att.iter().filter(|r| bundler::is_automated(&r.message.from_address, r.triage.as_ref().map(|t| t.category))).map(|r| r.message.id.clone()).collect();
                 let list = att.iter().map(|r| format!("- id {}: {}: {}", r.message.id, r.message.from_name, r.triage.as_ref().map(|t| t.summary.clone()).filter(|s| !s.is_empty()).unwrap_or_else(|| r.message.subject.clone()))).collect::<Vec<_>>().join("\n");
                 let valid: Vec<String> = att.iter().map(|r| r.message.id.clone()).collect();
@@ -206,7 +207,7 @@ pub fn run(cmd: &str, args: &Value, secrets: &dyn SecretStore) -> Result<Value, 
                 if let Ok(t) = ai_call(&k, &req) { replies = ai::parse_replies(&t, &valid); }
             }
             let thread_of = |id: &String| stored.iter().find(|m| &m.id == id).map(|m| m.thread_id.clone());
-            json!(ai::with_guaranteed_handled(replies, &automated).into_iter().map(|r| json!({ "threadIds": r.ids.iter().filter_map(|i| thread_of(i)).collect::<Vec<_>>(), "label": r.label, "kind": r.kind, "text": r.text })).collect::<Vec<_>>())
+            json!(ai::with_guaranteed_handled(replies, &automated).into_iter().map(|r| json!({ "threadIds": r.ids.iter().filter_map(thread_of).collect::<Vec<_>>(), "label": r.label, "kind": r.kind, "text": r.text })).collect::<Vec<_>>())
         }
         // The assistant answers from your mail, tasks and news, cites what it used, and cannot change anything.
         "ask" => {

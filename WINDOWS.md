@@ -1,6 +1,6 @@
-# everyday. for Windows: plan
+# everyday. for Windows
 
-Status: started. `windows/` holds a Rust workspace: `core/` (the ported logic, 37 tests passing on macOS) and `app/` (a Tauri 2 shell that compiles and shows a Today preview using the core). It has not been run on a Windows machine yet.
+Status: implemented and built in CI. `windows/` holds a Rust workspace: `core/` (`everyday-core`, 111 tests passing), `mobile/` (`everyday-mobile`, the shared JSON command layer, 4 tests passing), `desktop/` (`everyday-desktop`, the native Slint desktop app with no WebView, packaged into NSIS `.exe` and `.msi` installers by `.github/workflows/windows.yml`), and `app/` (an earlier Tauri 2 shell and Node UI test harness with 10 tests). It has not been smoke-tested interactively on a Windows machine yet.
 
 | Step | State |
 |---|---|
@@ -9,13 +9,13 @@ Status: started. `windows/` holds a Rust workspace: `core/` (the ported logic, 3
 | 3 AI: Gemini/Claude/OpenAI/local, triage, briefing (handled senders never appear), situational reply buttons with "That was me" guaranteed, assistant with citations | done, tested |
 | 4 Quick-add, repeats, tasks, update notice, morning schedule | done, tested |
 | 5 News: feeds, promo filter, muted topics, clustering, ranking, interest learning (swipe/read/save, 45-day decay) | done, tested |
-| 6 Voice: Gemini natural voice (cached on disk), falls back to the voices installed on the PC | done (request/audio/WAV/chunking tested); playback untested on Windows |
-| 7 UI: setup wizard, Today, Inbox, News with swipe deck, Tasks, Ask everyday., Settings, morning notification | written and compiles; never run on Windows |
-| 8 Installer and signing | Tauri NSIS/MSI configured; signing needs a Windows code-signing certificate |
+| 6 Voice: Gemini natural voice (cached on disk), playback via `rodio` | done (request/audio/WAV/chunking tested); playback untested on Windows |
+| 7 UI: setup wizard, Today, Inbox, News with swipe deck, Tasks, Ask everyday., Settings, Wi-Fi sync | implemented in native Slint (`windows/desktop`); compiles on Windows in CI |
+| 8 Installer and signing | NSIS/MSI configured via `cargo-packager` in `windows/desktop`; signing needs a Windows code-signing certificate |
 
-Calendar: read-only through a secret iCal (.ics) link from Google, Outlook or iCloud (events, all-day, repeats, cancellations), shown under Today and fed to the briefing. Not ported: two-way sync with Apple/Windows calendars and Apple Reminders (tasks stay in the app's own list). 96 core tests pass on macOS.
+Calendar: read-only through a secret iCal (.ics) link from Google, Outlook or iCloud (events, all-day, repeats, cancellations), shown under Today and fed to the briefing. Not ported: two-way sync with Apple/Windows calendars and Apple Reminders (tasks stay in the app's own list). 111 core tests and 4 mobile command-layer tests pass on macOS.
 
-Run the tests with `cd windows && cargo test -p everyday-core`. Run the preview on Windows with `cd windows/app && cargo tauri dev`.
+Run the Rust tests with `cd windows && cargo test -p everyday-core -p everyday-mobile --locked`. Run the desktop preview with `cd windows/desktop && cargo run`. Run the UI formatting/reply regression tests with `cd windows/app && node --test test/*.test.cjs`.
 
 ## Why the Mac code can't be reused directly
 The Mac app is SwiftUI plus Apple frameworks (Network.framework for IMAP, Keychain, EventKit, AVFoundation, AppKit). Swift runs on Windows, but SwiftUI does not. Everything under `Sources/Everyday/` has to be rebuilt; the *logic* in `Sources/EverydayCore/` has to be ported, with the Mac code as the specification and its checks as the test suite.

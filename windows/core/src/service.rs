@@ -29,7 +29,7 @@ pub fn sync<S: Read + Write>(c: &mut Imap<S>, store: &Store, now: i64) -> Result
     let mut known: Vec<StoredEmail> = store.all("email", 5000);
     // Read every ID without loading every body; a display-page limit must not cause repeated downloads.
     let mut known_ids = store.ids("email").map_err(|e| ImapError::Io(e.to_string()))?;
-    if known_ids.iter().any(|id| parse_id(id).map_or(false, |(v, _)| v != validity)) {     // the mailbox was rebuilt on the server: start over
+    if known_ids.iter().any(|id| parse_id(id).is_some_and(|(v, _)| v != validity)) {     // the mailbox was rebuilt on the server: start over
         store.delete_all("email").map_err(|e| ImapError::Io(e.to_string()))?;
         known.clear(); known_ids.clear();
     }

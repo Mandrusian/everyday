@@ -21,6 +21,7 @@ pub fn imap_session(host: &str, port: u16, user: &str, password: &str) -> Result
 }
 
 /// Sends one approved message. Port 465 is implicit TLS; anything else is upgraded with STARTTLS before the password is sent.
+#[allow(clippy::too_many_arguments)]
 pub fn smtp_send(host: &str, port: u16, implicit_tls: bool, user: &str, password: &str, from: &str, to: &[String], message: &[u8]) -> Result<(), SmtpError> {
     if implicit_tls { return smtp::send(tls(host, port).map_err(SmtpError::Io)?, user, password, from, to, message); }
     let mut r = BufReader::new(tcp(host, port)?);
